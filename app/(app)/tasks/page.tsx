@@ -9,9 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { Input, Select } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
-import type { Project, Task, TaskStatus } from "@/lib/types";
+import type {
+  Paginated,
+  Project,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  TaskType,
+} from "@/lib/types";
+import { isOverdue, todayISO } from "@/lib/utils";
 
 interface Filters {
   status: string;
@@ -22,6 +31,9 @@ interface Filters {
   direction: "asc" | "desc";
 }
 
+type DeadlineFilter = "" | "overdue" | "upcoming";
+type PaginationMeta = Paginated<Task>["meta"];
+
 const INITIAL_FILTERS: Filters = {
   status: "",
   priority: "",
@@ -31,13 +43,24 @@ const INITIAL_FILTERS: Filters = {
   direction: "desc",
 };
 
+function addDays(iso: string, days: number): string {
+  const date = new Date(iso);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export default function TasksPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
+  const [deadline, setDeadline] = useState<DeadlineFilter>("");
   const [view, setView] = useState<"board" | "list">("list");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,21 +75,33 @@ export default function TasksPage() {
       .catch(() => undefined);
   }, []);
 
+  const effectivePerPage = view === "board" ? 200 : perPage;
+  const today = todayISO();
+
   useEffect(() => {
     let active = true;
     api
       .listTasks({
         status: (filters.status || undefined) as TaskStatus | undefined,
-        priority: (filters.priority || undefined) as never,
-        type: (filters.type || undefined) as never,
+        priority: (filters.priority || undefined) as TaskPriority | undefined,
+        type: (filters.type || undefined) as TaskType | undefined,
         project_id: filters.project_id ? Number(filters.project_id) : undefined,
+        due_before:
+          deadline === "overdue"
+            ? today
+            : deadline === "upcoming"
+              ? addDays(today, 7)
+              : undefined,
+        due_after: deadline === "upcoming" ? today : undefined,
         sort: filters.sort,
         direction: filters.direction,
-        per_page: 200,
+        page,
+        per_page: effectivePerPage,
       })
       .then((response) => {
         if (!active) return;
         setTasks(response.data);
+        setMeta(response.meta);
         setError(null);
       })
       .catch((err) => {
@@ -81,28 +116,68 @@ export default function TasksPage() {
     return () => {
       active = false;
     };
-  }, [filters]);
+  }, [filters, deadline, page, effectivePerPage, reloadKey, today]);
 
   const filtered = useMemo(() => {
+    let result = tasks;
+    if (deadline === "overdue") {
+      result = result.filter(isOverdue);
+    } else if (deadline === "upcoming") {
+      result = result.filter((task) => task.status !== "Done" && !isOverdue(task));
+    }
     const term = search.trim().toLowerCase();
-    if (!term) return tasks;
-    return tasks.filter(
-      (task) =>
-        task.title.toLowerCase().includes(term) ||
-        (task.description ?? "").toLowerCase().includes(term) ||
-        (task.project?.name ?? "").toLowerCase().includes(term),
-    );
-  }, [tasks, search]);
+    if (term) {
+      result = result.filter(
+        (task) =>
+          task.title.toLowerCase().includes(term) ||
+          (task.description ?? "").toLowerCase().includes(term) ||
+          (task.project?.name ?? "").toLowerCase().includes(term),
+      );
+    }
+    return result;
+  }, [tasks, deadline, search]);
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setLoading(true);
+    setPage(1);
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function resetFilters() {
-    setSearch("");
+  function changeDeadline(value: DeadlineFilter) {
     setLoading(true);
+    setPage(1);
+    setDeadline(value);
+  }
+
+  function resetFilters() {
+    setLoading(true);
+    setSearch("");
+    setDeadline("");
+    setPage(1);
     setFilters(INITIAL_FILTERS);
+  }
+
+  function switchView(next: "board" | "list") {
+    if (next === view) return;
+    setLoading(true);
+    setPage(1);
+    setView(next);
+  }
+
+  function goToPage(next: number) {
+    setLoading(true);
+    setPage(next);
+  }
+
+  function changePerPage(value: number) {
+    setLoading(true);
+    setPerPage(value);
+    setPage(1);
+  }
+
+  function reload() {
+    setLoading(true);
+    setReloadKey((key) => key + 1);
   }
 
   function upsertTask(task: Task) {
@@ -123,6 +198,7 @@ export default function TasksPage() {
     try {
       const response = await api.updateTaskStatus(task.id, status);
       upsertTask(response.data);
+      if (filters.status) reload();
     } catch (err) {
       setTasks(previous);
       setActionError(
@@ -144,7 +220,10 @@ export default function TasksPage() {
     filters.priority ||
     filters.type ||
     filters.project_id ||
+    deadline ||
     search;
+
+  const showPagination = view === "list";
 
   return (
     <div className="space-y-6">
@@ -152,7 +231,7 @@ export default function TasksPage() {
         <div>
           <h2 className="text-xl font-semibold">Tasks</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {filtered.length} task ditampilkan.
+            {filtered.length} ditampilkan · {meta?.total ?? tasks.length} total.
           </p>
         </div>
         <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
@@ -161,7 +240,7 @@ export default function TasksPage() {
       <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
-            placeholder="Cari judul / project…"
+            placeholder="Cari di halaman ini…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -215,6 +294,18 @@ export default function TasksPage() {
           </Select>
 
           <Select
+            className="max-w-[190px]"
+            value={deadline}
+            onChange={(event) =>
+              changeDeadline(event.target.value as DeadlineFilter)
+            }
+          >
+            <option value="">Semua deadline</option>
+            <option value="overdue">Terlambat</option>
+            <option value="upcoming">7 hari ke depan</option>
+          </Select>
+
+          <Select
             className="max-w-[160px]"
             value={filters.sort}
             onChange={(event) => updateFilter("sort", event.target.value)}
@@ -245,7 +336,7 @@ export default function TasksPage() {
           <div className="ml-auto inline-flex rounded-lg border border-zinc-300 p-0.5 dark:border-zinc-700">
             <button
               type="button"
-              onClick={() => setView("list")}
+              onClick={() => switchView("list")}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
                 view === "list"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -256,7 +347,7 @@ export default function TasksPage() {
             </button>
             <button
               type="button"
-              onClick={() => setView("board")}
+              onClick={() => switchView("board")}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
                 view === "board"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -283,9 +374,7 @@ export default function TasksPage() {
               ? "Tidak ada task yang cocok dengan filter."
               : "Buat task pertama Anda."
           }
-          action={
-            <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
-          }
+          action={<Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>}
         />
       ) : view === "board" ? (
         <KanbanBoard
@@ -295,11 +384,25 @@ export default function TasksPage() {
           onAdd={openNewTask}
         />
       ) : (
-        <Card className="space-y-2 p-4">
-          {filtered.map((task) => (
-            <TaskListItem key={task.id} task={task} />
-          ))}
-        </Card>
+        <>
+          <Card className="space-y-2 p-4">
+            {filtered.map((task) => (
+              <TaskListItem key={task.id} task={task} />
+            ))}
+          </Card>
+
+          {showPagination ? (
+            <Pagination
+              page={meta?.current_page ?? page}
+              lastPage={meta?.last_page ?? 1}
+              total={meta?.total ?? tasks.length}
+              perPage={perPage}
+              perPageOptions={[10, 20, 50, 100]}
+              onPageChange={goToPage}
+              onPerPageChange={changePerPage}
+            />
+          ) : null}
+        </>
       )}
 
       {formOpen ? (
@@ -311,7 +414,14 @@ export default function TasksPage() {
           }
           defaultStatus={defaultStatus}
           onClose={() => setFormOpen(false)}
-          onSaved={upsertTask}
+          onSaved={(saved) => {
+            if (editingTask) {
+              upsertTask(saved);
+            } else {
+              reload();
+              setPage(1);
+            }
+          }}
         />
       ) : null}
     </div>

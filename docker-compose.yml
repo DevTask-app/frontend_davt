@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        # URL backend yang diakses dari dalam container web.
+        # Ganti ke http://app:8000 jika backend_devt berjalan di network Docker yang sama.
+        BACKEND_API_URL: ${BACKEND_API_URL:-http://host.docker.internal:8000}
+    image: frontend_davt
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

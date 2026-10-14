@@ -8,9 +8,10 @@ mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
 
 - Autentikasi: register, login, logout, proteksi rute.
 - Dashboard: ringkasan project/task, deadline terdekat, laporan mingguan.
-- Projects: CRUD, filter status, pencarian, halaman detail.
+- Projects: CRUD, filter status, pencarian, pagination server-side, halaman detail.
 - Tasks: CRUD, Kanban (drag & drop) + list, filter status/prioritas/tipe/project,
-  sortir, pencarian, ubah status/prioritas cepat.
+  filter deadline (terlambat / 7 hari ke depan), sortir, pencarian, pagination
+  server-side, ubah status/prioritas cepat.
 - Detail task: riwayat aktivitas (activity log), estimasi vs realisasi jam.
 - Profil: informasi akun + statistik.
 - Responsif (mobile drawer + desktop sidebar).
@@ -47,12 +48,37 @@ Buka http://localhost:3000.
 ### Perintah lain
 
 ```bash
-npm run build      # build produksi
+npm run build      # build produksi (output standalone)
 npm run start      # jalankan hasil build
 npm run lint       # ESLint
 npm run typecheck  # tsc --noEmit
 npm test           # Vitest (unit test schema & util)
 ```
+
+## Docker
+
+`next.config.ts` memakai `output: "standalone"`. Build & jalankan:
+
+```bash
+docker compose up --build            # http://localhost:3000
+```
+
+atau manual:
+
+```bash
+docker build --build-arg BACKEND_API_URL=http://host.docker.internal:8000 -t frontend_davt .
+docker run --rm -p 3000:3000 frontend_davt
+```
+
+`BACKEND_API_URL` di-bake saat build (rewrite di-resolve ketika `next build`),
+jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+## Dokumentasi
+
+- [`docs/ERD.md`](docs/ERD.md) — ERD & aturan relasi backend.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — konfigurasi, Docker, deploy, checklist rilis.
+- [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md) — daftar tangkapan layar.
 
 ## Arsitektur singkat
 
@@ -86,7 +112,10 @@ components/
   projects/       # card, form
   dashboard/      # stat card
 tests/            # unit test Vitest
+docs/             # ERD, deployment, screenshots
 proxy.ts          # proteksi rute
+Dockerfile        # image standalone
+docker-compose.yml
 ```
 
 ## Catatan backend
@@ -94,7 +123,11 @@ proxy.ts          # proteksi rute
 - Endpoint: `/api/v1` (lihat `backend_devt/routes/api.php`).
 - Nilai enum harus persis, mis. status task `Backlog | To Do | In Progress |
   In Review | Blocked | Done`.
-- Pencarian teks dilakukan di sisi klien karena endpoint list belum mendukung
-  parameter `search`.
+- Pencarian teks dilakukan di sisi klien terhadap halaman yang sedang tampil,
+  karena endpoint list belum mendukung parameter `search`. Gunakan filter
+  server-side (status/prioritas/tipe/project/tanggal) untuk mempersempit data
+  lintas halaman.
 - Pagination memakai `meta.current_page` / `meta.last_page` (link dari backend
   menunjuk ke `localhost:8000`, jadi tidak dipakai).
+- Filter deadline memakai parameter `due_before`/`due_after`; hasilnya dirapikan
+  di klien agar task berstatus `Done` tidak ikut terhitung terlambat.

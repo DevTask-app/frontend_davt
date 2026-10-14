@@ -7,14 +7,21 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
-import type { Project } from "@/lib/types";
+import type { Paginated, Project } from "@/lib/types";
+
+type PaginationMeta = Paginated<Project>["meta"];
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(12);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [target, setTarget] = useState<Project | null>(null);
@@ -24,10 +31,11 @@ export default function ProjectsPage() {
   useEffect(() => {
     let active = true;
     api
-      .listProjects({ per_page: 100 })
+      .listProjects({ page, per_page: perPage })
       .then((response) => {
         if (!active) return;
         setProjects(response.data);
+        setMeta(response.meta);
         setError(null);
       })
       .catch((err) => {
@@ -42,7 +50,7 @@ export default function ProjectsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page, perPage, reloadKey]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -54,13 +62,30 @@ export default function ProjectsPage() {
     );
   }, [projects, search]);
 
-  function handleSaved(project: Project) {
-    setProjects((prev) => {
-      const exists = prev.some((item) => item.id === project.id);
-      return exists
-        ? prev.map((item) => (item.id === project.id ? project : item))
-        : [project, ...prev];
-    });
+  function openCreate() {
+    setEditing(null);
+    setFormOpen(true);
+  }
+
+  function goToPage(next: number) {
+    setLoading(true);
+    setPage(next);
+  }
+
+  function changePerPage(value: number) {
+    setLoading(true);
+    setPerPage(value);
+    setPage(1);
+  }
+
+  function reload() {
+    setLoading(true);
+    setReloadKey((key) => key + 1);
+  }
+
+  function handleSaved() {
+    reload();
+    setPage(1);
   }
 
   async function handleDelete() {
@@ -69,8 +94,8 @@ export default function ProjectsPage() {
     setActionError(null);
     try {
       await api.deleteProject(target.id);
-      setProjects((prev) => prev.filter((item) => item.id !== target.id));
       setTarget(null);
+      reload();
     } catch (err) {
       setActionError(
         err instanceof ApiError
@@ -88,21 +113,14 @@ export default function ProjectsPage() {
         <div>
           <h2 className="text-xl font-semibold">Projects</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {projects.length} project terdaftar.
+            {meta?.total ?? projects.length} project terdaftar.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        >
-          Project Baru
-        </Button>
+        <Button onClick={openCreate}>Project Baru</Button>
       </div>
 
       <Input
-        placeholder="Cari project…"
+        placeholder="Cari project di halaman ini…"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         className="max-w-sm"
@@ -122,36 +140,36 @@ export default function ProjectsPage() {
               ? "Coba kata kunci lain."
               : "Buat project pertama untuk mulai menambahkan task."
           }
-          action={
-            !search ? (
-              <Button
-                onClick={() => {
-                  setEditing(null);
-                  setFormOpen(true);
-                }}
-              >
-                Project Baru
-              </Button>
-            ) : undefined
-          }
+          action={!search ? <Button onClick={openCreate}>Project Baru</Button> : undefined}
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onEdit={(item) => {
-                setEditing(item);
-                setFormOpen(true);
-              }}
-              onDelete={(item) => {
-                setActionError(null);
-                setTarget(item);
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onEdit={(item) => {
+                  setEditing(item);
+                  setFormOpen(true);
+                }}
+                onDelete={(item) => {
+                  setActionError(null);
+                  setTarget(item);
+                }}
+              />
+            ))}
+          </div>
+
+          <Pagination
+            page={meta?.current_page ?? page}
+            lastPage={meta?.last_page ?? 1}
+            total={meta?.total ?? projects.length}
+            perPage={perPage}
+            onPageChange={goToPage}
+            onPerPageChange={changePerPage}
+          />
+        </>
       )}
 
       {formOpen ? (
