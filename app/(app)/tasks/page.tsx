@@ -75,7 +75,7 @@ export default function TasksPage() {
       .catch(() => undefined);
   }, []);
 
-  const effectivePerPage = view === "board" ? 200 : perPage;
+  const effectivePerPage = view === "board" ? 100 : perPage;
   const today = todayISO();
 
   useEffect(() => {

@@ -88,3 +88,32 @@ export function humanizeFieldValue(field: string, value: unknown): string {
   if (field === "due_date") return formatDate(String(value));
   return String(value);
 }
+
+export const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+
+export const ACCEPTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
+
+export function validateImageFile(file: File): string | null {
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    return "Format gambar harus JPG, PNG, WEBP, atau GIF.";
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    return "Ukuran foto maksimal 2 MB.";
+  }
+  return null;
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function storagePath(url: string): string {
+  return url.replace(/^https?:\/\/[^/]+/, "");
+}

@@ -19,10 +19,14 @@ import {
 } from "@/lib/enums";
 import type { Task, TaskActivityLog, TaskPriority, TaskStatus } from "@/lib/types";
 import {
+  ACCEPTED_IMAGE_TYPES,
   formatDate,
   formatDateTime,
+  formatFileSize,
   humanizeFieldValue,
   isOverdue,
+  storagePath,
+  validateImageFile,
 } from "@/lib/utils";
 
 export default function TaskDetailPage() {
@@ -39,6 +43,8 @@ export default function TaskDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -115,9 +121,62 @@ export default function TaskDetailPage() {
     }
   }
 
+  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !task) return;
+
+    const message = validateImageFile(file);
+    if (message) {
+      setActionError(message);
+      return;
+    }
+
+    setUploading(true);
+    setActionError(null);
+    try {
+      await api.uploadTaskAttachment(task.id, file);
+      const [taskRes, activityRes] = await Promise.all([
+        api.getTask(task.id),
+        api.taskActivities(task.id),
+      ]);
+      setTask(taskRes.data);
+      setActivities(activityRes.data);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err.firstError() : "Gagal mengunggah foto.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAttachment(id: number) {
+    if (!task) return;
+    setRemovingId(id);
+    setActionError(null);
+    try {
+      await api.deleteTaskAttachment(id);
+      const [taskRes, activityRes] = await Promise.all([
+        api.getTask(task.id),
+        api.taskActivities(task.id),
+      ]);
+      setTask(taskRes.data);
+      setActivities(activityRes.data);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err.firstError() : "Gagal menghapus foto.",
+      );
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
   if (loading) return <Spinner label="Memuat task…" />;
   if (error) return <ErrorBanner message={error} />;
   if (!task) return null;
+
+  const attachments = task.attachments ?? [];
 
   return (
     <div className="space-y-6">
@@ -188,6 +247,71 @@ export default function TaskDetailPage() {
               </p>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader
+              title="Lampiran"
+              description={`${attachments.length} foto terlampir.`}
+              action={
+                <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                  {uploading ? "Mengunggah…" : "Tambah foto"}
+                  <input
+                    type="file"
+                    accept={ACCEPTED_IMAGE_TYPES.join(",")}
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={handleUpload}
+                  />
+                </label>
+              }
+            />
+            <div className="p-4">
+              {attachments.length === 0 ? (
+                <EmptyState
+                  title="Belum ada lampiran"
+                  description="Unggah foto (maks. 2 MB) sebagai bukti pengerjaan task."
+                />
+              ) : (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700"
+                    >
+                      <a
+                        href={storagePath(attachment.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <img
+                          src={storagePath(attachment.url)}
+                          alt={attachment.original_name}
+                          className="h-32 w-full object-cover"
+                        />
+                      </a>
+                      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span
+                          className="truncate text-xs text-zinc-500 dark:text-zinc-400"
+                          title={attachment.original_name}
+                        >
+                          {attachment.original_name} ·{" "}
+                          {formatFileSize(attachment.size)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={removingId === attachment.id}
+                          onClick={() => removeAttachment(attachment.id)}
+                          className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
 
           <Card>
             <CardHeader

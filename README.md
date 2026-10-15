@@ -7,12 +7,13 @@ mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
 ## Fitur
 
 - Autentikasi: register, login, logout, proteksi rute.
-- Dashboard: ringkasan project/task, deadline terdekat, laporan mingguan.
+- Dashboard: ringkasan project/task, prioritas hari ini, deadline terdekat, laporan mingguan.
 - Projects: CRUD, filter status, pencarian, pagination server-side, halaman detail.
 - Tasks: CRUD, Kanban (drag & drop) + list, filter status/prioritas/tipe/project,
   filter deadline (terlambat / 7 hari ke depan), sortir, pencarian, pagination
   server-side, ubah status/prioritas cepat.
-- Detail task: riwayat aktivitas (activity log), estimasi vs realisasi jam.
+- Detail task: riwayat aktivitas (activity log), estimasi vs realisasi jam,
+  lampiran foto (unggah/hapus, JPG/PNG/WEBP/GIF maks. 2 MB).
 - Profil: informasi akun + statistik.
 - Responsif (mobile drawer + desktop sidebar).
 
@@ -45,6 +46,12 @@ npm run dev
 
 Buka http://localhost:3000.
 
+Akun demo (sudah berisi data contoh: 2 project, 10 task yang mencakup semua
+status/prioritas, sebagian terlambat dan mendekati tenggat):
+
+- Email: `demo@davt.test`
+- Password: `Password123!`
+
 ### Perintah lain
 
 ```bash
@@ -76,6 +83,7 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 
 ## Dokumentasi
 
+- [`docs/API.md`](docs/API.md) — kontrak REST API `/api/v1` (endpoint, filter, response, error).
 - [`docs/ERD.md`](docs/ERD.md) — ERD & aturan relasi backend.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — konfigurasi, Docker, deploy, checklist rilis.
 - [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md) — daftar tangkapan layar.
@@ -83,7 +91,8 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 ## Arsitektur singkat
 
 - **Proxy rewrite** (`next.config.ts`): `/api/backend/:path*` →
-  `${BACKEND_API_URL}/api/v1/:path*`.
+  `${BACKEND_API_URL}/api/v1/:path*`; `/storage/:path*` →
+  `${BACKEND_API_URL}/storage/:path*` (signed URL lampiran task).
 - **Route protection** (`proxy.ts`, pengganti `middleware` di Next 16):
   membaca cookie `davt_token`; redirect ke `/login` bila belum masuk dan ke
   `/dashboard` bila sudah masuk tetapi membuka `/login` `/register`.
@@ -131,3 +140,14 @@ docker-compose.yml
   menunjuk ke `localhost:8000`, jadi tidak dipakai).
 - Filter deadline memakai parameter `due_before`/`due_after`; hasilnya dirapikan
   di klien agar task berstatus `Done` tidak ikut terhitung terlambat.
+- Lampiran task (`POST /tasks/{id}/attachments`, `DELETE /attachments/{id}`)
+  memakai `multipart/form-data`; `GET /tasks/{id}` mengembalikan `attachments[]`
+  berisi **signed URL** yang di-proxy lewat rewrite `/storage/*`.
+
+## Keamanan dependensi
+
+`npm audit --omit=dev` bersih (0 kerentanan pada dependensi produksi). Sisa
+advisory hanya pada dependensi pengembangan (`eslint-config-next` → `braces`, dan
+`vitest` → `tinypool`); perbaikannya memerlukan upgrade mayor yang breaking,
+sehingga sengaja tidak dipaksakan (`npm audit fix --force` akan menurunkan
+`eslint-config-next` ke v14).

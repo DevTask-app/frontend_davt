@@ -60,6 +60,18 @@ export interface Task {
   project?: Project;
   subtasks?: Task[];
   activity_logs?: TaskActivityLog[];
+  attachments?: TaskAttachment[];
+}
+
+export interface TaskAttachment {
+  id: number;
+  task_id: number;
+  user_id: number;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  url: string;
+  created_at: string | null;
 }
 
 export interface TaskChange {

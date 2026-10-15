@@ -6,6 +6,7 @@ import type {
   ProjectStatus,
   Task,
   TaskActivityLog,
+  TaskAttachment,
   TaskPriority,
   TaskStatus,
   TaskType,
@@ -103,11 +104,14 @@ async function request<T>(
 ): Promise<T> {
   const { method = "GET", body, query, auth = true, retry = true } = options;
 
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   const headers: Record<string, string> = {
     Accept: "application/json",
   };
 
-  if (body !== undefined) {
+  if (body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -119,7 +123,12 @@ async function request<T>(
   const response = await fetch(buildUrl(path, query), {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : isFormData
+          ? (body as FormData)
+          : JSON.stringify(body),
   });
 
   if (response.status === 401 && auth && retry) {
@@ -346,5 +355,19 @@ export const api = {
 
   taskActivities(id: number | string) {
     return request<{ data: TaskActivityLog[] }>(`/tasks/${id}/activities`);
+  },
+
+  // Task attachments
+  uploadTaskAttachment(taskId: number | string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ data: TaskAttachment }>(`/tasks/${taskId}/attachments`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deleteTaskAttachment(id: number | string) {
+    return request<void>(`/attachments/${id}`, { method: "DELETE" });
   },
 };

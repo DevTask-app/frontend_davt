@@ -12,6 +12,8 @@ erDiagram
     projects ||--o{ tasks : "berisi"
     tasks ||--o{ tasks : "subtask (parent_task_id)"
     tasks ||--o{ task_activity_logs : "punya riwayat"
+    tasks ||--o{ task_attachments : "punya lampiran"
+    users ||--o{ task_attachments : "mengunggah"
 
     users {
         bigint id PK
@@ -68,6 +70,19 @@ erDiagram
         json changes "snapshot perubahan"
         timestamp created_at
     }
+
+    task_attachments {
+        bigint id PK
+        bigint task_id FK
+        bigint user_id FK "pengunggah"
+        string disk "default local"
+        string path "path relatif pada disk"
+        string original_name "nama file asli"
+        string mime_type "image/jpeg|..."
+        bigint size "ukuran (byte)"
+        timestamp created_at
+        timestamp updated_at
+    }
 ```
 
 ## Catatan relasi & aturan
@@ -83,6 +98,10 @@ erDiagram
   saat parent dihapus (`cascadeOnDelete` pada `parent_task_id`).
 - `task_activity_logs` tidak punya `updated_at` (append-only) dan terhapus
   berantai saat task-nya dihapus.
+- `task_attachments` terhapus berantai saat task-nya dihapus; `user_id` memakai
+  `ON DELETE RESTRICT`. File fisik disimpan di disk `local`
+  (`storage/app/private`) dan diakses lewat **signed URL** (`/storage/{path}`),
+  bukan akses publik.
 - Enum disimpan sebagai `string` + index (bukan tipe enum PostgreSQL).
 
 ## Pemetaan ke frontend
@@ -93,3 +112,4 @@ erDiagram
 | `projects` | `Project` | `/projects`, `/projects/[id]` |
 | `tasks` | `Task` | `/tasks`, `/tasks/[id]` |
 | `task_activity_logs` | `TaskActivityLog` | tab riwayat di `/tasks/[id]` |
+| `task_attachments` | `TaskAttachment` | galeri lampiran di `/tasks/[id]` |

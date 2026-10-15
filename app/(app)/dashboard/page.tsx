@@ -11,12 +11,13 @@ import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/lib/enums";
 import type { DashboardSummary, Task, WeeklyReport } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, todayISO } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [upcoming, setUpcoming] = useState<Task[]>([]);
   const [report, setReport] = useState<WeeklyReport | null>(null);
+  const [todayPriorities, setTodayPriorities] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,12 +27,25 @@ export default function DashboardPage() {
       api.dashboardSummary(),
       api.dashboardUpcoming(5),
       api.weeklyReport(),
+      api.listTasks({
+        due_before: todayISO(),
+        sort: "due_date",
+        direction: "asc",
+        per_page: 100,
+      }),
     ])
-      .then(([summaryRes, upcomingRes, reportRes]) => {
+      .then(([summaryRes, upcomingRes, reportRes, priorityRes]) => {
         if (!active) return;
         setSummary(summaryRes.data);
         setUpcoming(upcomingRes.data);
         setReport(reportRes.data);
+        setTodayPriorities(
+          priorityRes.data.filter(
+            (task) =>
+              (task.priority === "High" || task.priority === "Critical") &&
+              task.status !== "Done",
+          ),
+        );
         setError(null);
       })
       .catch((err) => {
@@ -100,6 +114,33 @@ export default function DashboardPage() {
           hint={report ? `${report.period.start} — ${report.period.end}` : undefined}
         />
       </div>
+
+      <Card>
+        <CardHeader
+          title="Prioritas hari ini"
+          description="Task prioritas High/Critical yang sudah jatuh tempo atau berakhir hari ini."
+          action={
+            <Link
+              href="/tasks"
+              className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Lihat semua
+            </Link>
+          }
+        />
+        <div className="space-y-2 p-4">
+          {todayPriorities.length === 0 ? (
+            <EmptyState
+              title="Tidak ada prioritas mendesak"
+              description="Tidak ada task High/Critical yang jatuh tempo atau berakhir hari ini."
+            />
+          ) : (
+            todayPriorities
+              .slice(0, 5)
+              .map((task) => <TaskListItem key={task.id} task={task} />)
+          )}
+        </div>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

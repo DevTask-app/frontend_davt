@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   cn,
   formatDate,
+  formatFileSize,
   humanizeFieldValue,
   initials,
   isDueSoon,
   isOverdue,
   relativeDay,
+  storagePath,
   toDateInput,
   todayISO,
+  validateImageFile,
 } from "@/lib/utils";
 
 function shiftDays(days: number): string {
@@ -86,5 +89,43 @@ describe("humanizeFieldValue", () => {
 
   it("formats due dates", () => {
     expect(humanizeFieldValue("due_date", todayISO())).not.toBe("—");
+  });
+});
+
+describe("storagePath", () => {
+  it("strips the origin from an absolute signed url", () => {
+    expect(storagePath("http://localhost:8000/storage/a.png?signature=x")).toBe(
+      "/storage/a.png?signature=x",
+    );
+  });
+
+  it("keeps an already relative path untouched", () => {
+    expect(storagePath("/storage/a.png")).toBe("/storage/a.png");
+  });
+});
+
+describe("formatFileSize", () => {
+  it("formats bytes, kilobytes and megabytes", () => {
+    expect(formatFileSize(500)).toBe("500 B");
+    expect(formatFileSize(2048)).toBe("2 KB");
+    expect(formatFileSize(2 * 1024 * 1024)).toBe("2.0 MB");
+  });
+});
+
+describe("validateImageFile", () => {
+  it("accepts supported images under the limit", () => {
+    expect(validateImageFile({ type: "image/png", size: 1024 } as File)).toBeNull();
+  });
+
+  it("rejects unsupported file types", () => {
+    expect(
+      validateImageFile({ type: "application/pdf", size: 1024 } as File),
+    ).toBe("Format gambar harus JPG, PNG, WEBP, atau GIF.");
+  });
+
+  it("rejects images larger than two megabytes", () => {
+    expect(
+      validateImageFile({ type: "image/png", size: 2 * 1024 * 1024 + 1 } as File),
+    ).toBe("Ukuran foto maksimal 2 MB.");
   });
 });

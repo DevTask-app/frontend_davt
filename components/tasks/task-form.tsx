@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
 import type { Project, Task } from "@/lib/types";
-import { toDateInput } from "@/lib/utils";
+import { ACCEPTED_IMAGE_TYPES, toDateInput, validateImageFile } from "@/lib/utils";
 import { taskSchema, zodFieldErrors } from "@/lib/validation";
 
 interface TaskFormProps {
@@ -70,9 +70,38 @@ export function TaskForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   function update(key: keyof typeof values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function addPhotos(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (selected.length === 0) return;
+
+    setPhotoError(null);
+    const next = [...photos];
+    for (const file of selected) {
+      const message = validateImageFile(file);
+      if (message) {
+        setPhotoError(message);
+        continue;
+      }
+      next.push({ file, preview: URL.createObjectURL(file) });
+    }
+    setPhotos(next);
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return next;
+    });
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -111,7 +140,16 @@ export function TaskForm({
             estimated_hours: data.estimated_hours,
             blocked_reason: data.blocked_reason,
           });
-      onSaved(response.data);
+
+      let saved = response.data;
+      if (!task && photos.length > 0) {
+        for (const photo of photos) {
+          await api.uploadTaskAttachment(saved.id, photo.file);
+        }
+        saved = (await api.getTask(saved.id)).data;
+      }
+
+      onSaved(saved);
       onClose();
     } catch (error) {
       if (error instanceof ApiError) {
@@ -268,6 +306,45 @@ export function TaskForm({
               onChange={(event) => update("blocked_reason", event.target.value)}
               placeholder="Mengapa task ini terhambat?"
             />
+          </Field>
+        ) : null}
+
+        {!task ? (
+          <Field
+            label="Foto (opsional)"
+            htmlFor="t-photos"
+            error={photoError ?? undefined}
+            hint="JPG, PNG, WEBP, atau GIF. Maksimal 2 MB per foto."
+          >
+            <Input
+              id="t-photos"
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(",")}
+              multiple
+              className="h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1 file:text-sm file:font-medium dark:file:bg-zinc-700"
+              onChange={addPhotos}
+            />
+            {photos.length > 0 ? (
+              <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {photos.map((photo, index) => (
+                  <li key={photo.preview} className="relative">
+                    <img
+                      src={photo.preview}
+                      alt={photo.file.name}
+                      className="h-20 w-full rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      aria-label={`Hapus ${photo.file.name}`}
+                      className="absolute -right-1 -top-1 h-5 w-5 rounded-full bg-zinc-900/80 text-xs leading-none text-white"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </Field>
         ) : null}
 

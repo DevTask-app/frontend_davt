@@ -91,3 +91,16 @@ menjalankan `node server.js` sebagai user non-root).
 - [ ] Backend sudah di-seed (user demo + project/task) agar UI tidak kosong
 - [ ] Login demo berhasil dan token tersimpan di cookie `davt_token`
 - [ ] Redirect rute terlindungi berjalan (belum login → `/login`)
+
+## 6. Troubleshooting
+
+- **Login gagal padahal user ada**: pastikan backend yang diakses memakai basis
+  data yang sama dengan yang di-seed. Pada `backend_devt`, menjalankan
+  `php artisan serve` lokal memakai PostgreSQL `.env` (mis. `127.0.0.1:5432`),
+  sedangkan container Docker (`docker compose up`) memakai `db` internal yang
+  dipetakan ke `127.0.0.1:5433`. Data bisa berbeda antar keduanya.
+- **UI kosong / dashboard nol**: user demo belum memiliki project/task. Jalankan
+  seeder di lingkungan backend yang benar, mis.
+  `docker exec backend_devt-app-1 php artisan db:seed --force`.
+- **Aset statis hilang di Docker**: pastikan `public/` dan `.next/static`
+  tersalin (sudah ditangani `Dockerfile`).

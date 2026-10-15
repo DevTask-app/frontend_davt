@@ -34,7 +34,7 @@ export default function ProjectDetailPage() {
     let active = true;
     Promise.all([
       api.getProject(projectId),
-      api.listProjectTasks(projectId, { per_page: 200 }),
+      api.listProjectTasks(projectId, { per_page: 100 }),
     ])
       .then(([projectRes, tasksRes]) => {
         if (!active) return;

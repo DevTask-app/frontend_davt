@@ -82,6 +82,8 @@ export const ACTIVITY_ACTIONS: Record<string, string> = {
   updated: "Task diperbarui",
   status_changed: "Status diubah",
   priority_changed: "Prioritas diubah",
+  attachment_added: "Lampiran ditambahkan",
+  attachment_removed: "Lampiran dihapus",
 };
 
 export const FIELD_LABELS: Record<string, string> = {
@@ -95,4 +97,5 @@ export const FIELD_LABELS: Record<string, string> = {
   actual_hours: "Aktual jam",
   parent_task_id: "Parent task",
   blocked_reason: "Alasan terblokir",
+  attachment: "Lampiran",
 };
