@@ -17,6 +17,10 @@ mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
   server-side, ubah status/prioritas cepat, **penanggung jawab (assignee)**.
 - Detail task: riwayat aktivitas (activity log), estimasi vs realisasi jam,
   lampiran foto (unggah/hapus, JPG/PNG/WEBP/GIF maks. 2 MB).
+- **Notifikasi:** lonceng di topbar dengan jumlah belum dibaca (polling tiap 30
+  detik), dropdown pratinjau, dan halaman daftar (tandai dibaca / semua dibaca /
+  hapus, paginasi). Dikirim backend saat Anda ditugaskan ke sebuah task
+  (in-app + email).
 - Profil: informasi akun + statistik.
 - Responsif (mobile drawer + desktop sidebar).
 
@@ -123,12 +127,12 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 ```
 app/
   (auth)/         # login, register (layout tanpa shell)
-  (app)/          # area terproteksi: dashboard, projects, tasks, profile,
-                  #   workspaces/[id], invitations/[token]
-lib/              # api, auth, validation, types, enums, workspace, utils
+  (app)/          # area terproteksi: dashboard, projects, tasks, notifications,
+                  #   profile, workspaces/[id], invitations/[token]
+lib/              # api, auth, validation, types, enums, workspace, notifications, utils
 components/
-  layout/         # app shell (sidebar + topbar), workspace switcher
-  providers/      # AuthProvider, WorkspaceProvider
+  layout/         # app shell (sidebar + topbar), workspace switcher, notification bell
+  providers/      # AuthProvider, WorkspaceProvider, NotificationProvider
   ui/             # primitif UI (Button, Input, Modal, dll.)
   tasks/          # badge, list item, kanban, form, assignee chip
   projects/       # card, form
@@ -160,6 +164,13 @@ docker-compose.yml
 - Lampiran task (`POST /tasks/{id}/attachments`, `DELETE /attachments/{id}`)
   memakai `multipart/form-data`; `GET /tasks/{id}` mengembalikan `attachments[]`
   berisi **signed URL** yang di-proxy lewat rewrite `/storage/*`.
+- Notifikasi (`GET /notifications`, `GET /notifications/unread-count`,
+  `PATCH /notifications/{id}/read`, `POST /notifications/read-all`,
+  `DELETE /notifications/{id}`) bersifat per-user (tanpa header workspace); `id`
+  berupa UUID. Lonceng topbar melakukan polling `unread-count` tiap 30 detik dan
+  menyegarkan saat jendela kembali fokus. Payload notifikasi menyertakan
+  `workspace_id`; saat dibuka frontend mengaktifkan workspace tersebut lebih dulu
+  agar route `/tasks/{id}` (yang dibatasi workspace aktif) tetap resolve.
 
 ## Keamanan dependensi
 

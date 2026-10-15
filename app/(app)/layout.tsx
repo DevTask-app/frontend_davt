@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/components/providers/auth-provider";
+import { NotificationProvider } from "@/components/providers/notification-provider";
 import {
   WorkspaceProvider,
   useWorkspace,
@@ -34,7 +35,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceProvider>
-      <WorkspaceGate>{children}</WorkspaceGate>
+      <NotificationProvider>
+        <WorkspaceGate>{children}</WorkspaceGate>
+      </NotificationProvider>
     </WorkspaceProvider>
   );
 }

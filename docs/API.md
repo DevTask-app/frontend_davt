@@ -355,7 +355,54 @@ GET /api/v1/tasks?status=in_progress&priority=high&project_id=1&due_before=2026-
 > valid). Frontend melakukan pencarian judul di sisi klien pada halaman yang
 > sedang tampil.
 
-## 8. Activity log
+## 8. Notifications
+
+Notifikasi **in-app (database)** + **email** dikirim ke penerima saat task
+dibuat/diubah dengan `assignee_id` (self-assignment dan task tanpa assignee tidak
+memicu notifikasi). Endpoint di bawah ini bersifat per-user dan **tidak**
+memerlukan header `X-Workspace-Id`.
+
+| Method | Endpoint | Fungsi |
+| --- | --- | --- |
+| GET | `/notifications` | Daftar notifikasi user (paginated, default `per_page=15`, max 100) |
+| GET | `/notifications/unread-count` | Jumlah notifikasi belum dibaca |
+| PATCH | `/notifications/{id}/read` | Tandai satu notifikasi dibaca |
+| POST | `/notifications/read-all` | Tandai semua dibaca (`204`) |
+| DELETE | `/notifications/{id}` | Hapus notifikasi (`204`) |
+
+Resource notifikasi:
+
+```json
+{
+  "data": {
+    "id": "e47f01bb-2823-4d79-b6b5-bfc376e41bc2",
+    "type": "App\\Notifications\\TaskAssigned",
+    "data": {
+      "task_id": 4,
+      "task_title": "Implementasi autentikasi JWT",
+      "project_id": 1,
+      "project_name": "Demo Project",
+      "workspace_id": 3,
+      "assigned_by": "Demo User",
+      "url": "http://localhost:3000/tasks/4"
+    },
+    "read_at": null,
+    "created_at": "2026-10-15T06:28:41+00:00"
+  }
+}
+```
+
+- `id` berupa UUID. `GET /notifications/unread-count` →
+  `{ "data": { "unread_count": 2 } }`.
+- `url` menunjuk ke halaman task di frontend (`FRONTEND_URL`), sehingga frontend
+  cukup mengambil path-nya (`lib/notifications.ts` → `notificationHref`).
+- `workspace_id` adalah workspace pemilik task; frontend memakainya untuk
+  mengaktifkan workspace yang benar sebelum membuka `url`
+  (`notificationWorkspaceId` + `setActiveWorkspace`), karena route task dibatasi
+  pada workspace aktif.
+- Mengakses notifikasi milik user lain → `404`.
+
+## 9. Activity log
 
 `GET /tasks/{id}/activities` → koleksi log (append-only, tidak bisa diedit via
 CRUD task):
@@ -375,7 +422,7 @@ CRUD task):
 }
 ```
 
-## 9. Dashboard dan laporan
+## 10. Dashboard dan laporan
 
 **`GET /dashboard/summary`** (`data`-only, bukan koleksi resource):
 
@@ -411,7 +458,7 @@ hari ini`, urut tenggat, `limit` 1–50 (default 10). Response: koleksi
 }
 ```
 
-## 10. Status HTTP
+## 11. Status HTTP
 
 | Kode | Arti |
 | --- | --- |
@@ -426,12 +473,12 @@ hari ini`, urut tenggat, `limit` 1–50 (default 10). Response: koleksi
 | `422` | Validasi gagal |
 | `429` | Rate limit tercapai |
 
-## 11. Rate limiting
+## 12. Rate limiting
 
 - `POST /login` & `POST /auth/login` → `throttle:login` (5 percobaan/menit per IP).
 - `POST /register` → `throttle:6,1` (6 percobaan/menit).
 
-## 12. Keamanan
+## 13. Keamanan
 
 - Semua endpoint privat memakai guard `auth:api` (JWT).
 - Otorisasi berbasis keanggotaan workspace: `ProjectPolicy` / `TaskPolicy` /

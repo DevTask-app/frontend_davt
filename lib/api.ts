@@ -1,5 +1,6 @@
 import { clearToken, getToken, setToken } from "./auth";
 import type {
+  AppNotification,
   DashboardSummary,
   Paginated,
   Project,
@@ -465,5 +466,34 @@ export const api = {
 
   deleteTaskAttachment(id: number | string) {
     return request<void>(`/attachments/${id}`, { method: "DELETE" });
+  },
+
+  // Notifications
+  listNotifications(
+    params: Partial<{ page: number; per_page: number }> = {},
+  ) {
+    return request<Paginated<AppNotification>>("/notifications", {
+      query: params,
+    });
+  },
+
+  unreadNotificationCount() {
+    return request<{ data: { unread_count: number } }>(
+      "/notifications/unread-count",
+    );
+  },
+
+  markNotificationRead(id: string) {
+    return request<{ data: AppNotification }>(`/notifications/${id}/read`, {
+      method: "PATCH",
+    });
+  },
+
+  markAllNotificationsRead() {
+    return request<void>("/notifications/read-all", { method: "POST" });
+  },
+
+  deleteNotification(id: string) {
+    return request<void>(`/notifications/${id}`, { method: "DELETE" });
   },
 };

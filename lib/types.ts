@@ -181,3 +181,22 @@ export interface WeeklyReport {
   completed: number;
   completed_by_day: Record<string, number>;
 }
+
+export interface NotificationData {
+  task_id?: number;
+  task_title?: string;
+  project_id?: number;
+  project_name?: string;
+  workspace_id?: number;
+  assigned_by?: string;
+  url?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  data: NotificationData;
+  read_at: string | null;
+  created_at: string | null;
+}
+
