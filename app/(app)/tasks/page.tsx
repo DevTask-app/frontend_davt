@@ -13,6 +13,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
 import { useWorkspace } from "@/components/providers/workspace-provider";
+import { useAuth } from "@/components/providers/auth-provider";
 import type {
   Paginated,
   Project,
@@ -81,6 +82,8 @@ export default function TasksPage() {
 
   const effectivePerPage = view === "board" ? 100 : perPage;
   const today = todayISO();
+  const { user } = useAuth();
+
 
   useEffect(() => {
     let active = true;
@@ -305,6 +308,7 @@ export default function TasksPage() {
             onChange={(event) => updateFilter("assignee_id", event.target.value)}
           >
             <option value="">Semua penanggung jawab</option>
+            <option value={user?.id ? String(user.id) : ""}>Ditugaskan ke saya</option>
             {members.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.name}

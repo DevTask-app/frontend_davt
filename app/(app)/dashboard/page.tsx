@@ -10,7 +10,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/lib/enums";
-import type { DashboardSummary, Task, WeeklyReport } from "@/lib/types";
+import { useAuth } from "@/components/providers/auth-provider";
+import type { DashboardSummary, Task, WeeklyReport, Paginated } from "@/lib/types";
 import { formatDate, todayISO } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -18,8 +19,10 @@ export default function DashboardPage() {
   const [upcoming, setUpcoming] = useState<Task[]>([]);
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [todayPriorities, setTodayPriorities] = useState<Task[]>([]);
+  const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     let active = true;
@@ -33,8 +36,11 @@ export default function DashboardPage() {
         direction: "asc",
         per_page: 100,
       }),
+      user?.id
+        ? api.listTasks({ assignee_id: user.id, per_page: 100 })
+        : Promise.resolve({ data: [], meta: {} as Paginated<Task>["meta"] }),
     ])
-      .then(([summaryRes, upcomingRes, reportRes, priorityRes]) => {
+      .then(([summaryRes, upcomingRes, reportRes, priorityRes, myTasksRes]) => {
         if (!active) return;
         setSummary(summaryRes.data);
         setUpcoming(upcomingRes.data);
@@ -45,6 +51,9 @@ export default function DashboardPage() {
               (task.priority === "High" || task.priority === "Critical") &&
               task.status !== "Done",
           ),
+        );
+        setMyTasks(
+          (myTasksRes.data || []).filter((task) => task.status !== "Done"),
         );
         setError(null);
       })
@@ -60,7 +69,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.id]);
 
   if (loading) return <Spinner label="Memuat dashboard…" />;
   if (error) return <ErrorBanner message={error} />;
@@ -169,6 +178,25 @@ export default function DashboardPage() {
         </Card>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Tugas saya"
+              description="Task yang ditugaskan ke Anda dan belum selesai."
+            />
+            <div className="space-y-2 p-4">
+              {myTasks.length === 0 ? (
+                <EmptyState
+                  title="Tidak ada tugas untuk Anda"
+                  description="Anda belum ditugaskan ke task manapun yang belum selesai."
+                />
+              ) : (
+                myTasks
+                  .slice(0, 5)
+                  .map((task) => <TaskListItem key={task.id} task={task} />)
+              )}
+            </div>
+          </Card>
+
           <Card className="p-4">
             <h3 className="text-sm font-semibold">Task per status</h3>
             <ul className="mt-3 space-y-2">

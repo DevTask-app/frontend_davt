@@ -7,11 +7,14 @@ mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
 ## Fitur
 
 - Autentikasi: register, login, logout, proteksi rute.
+- **Workspace tim:** pemilih workspace di topbar, buat workspace, kelola anggota
+  (ubah peran/keluarkan), undang via email, terima undangan lewat link, kelola
+  (ubah nama / hapus) workspace.
 - Dashboard: ringkasan project/task, prioritas hari ini, deadline terdekat, laporan mingguan.
 - Projects: CRUD, filter status, pencarian, pagination server-side, halaman detail.
 - Tasks: CRUD, Kanban (drag & drop) + list, filter status/prioritas/tipe/project,
   filter deadline (terlambat / 7 hari ke depan), sortir, pencarian, pagination
-  server-side, ubah status/prioritas cepat.
+  server-side, ubah status/prioritas cepat, **penanggung jawab (assignee)**.
 - Detail task: riwayat aktivitas (activity log), estimasi vs realisasi jam,
   lampiran foto (unggah/hapus, JPG/PNG/WEBP/GIF maks. 2 MB).
 - Profil: informasi akun + statistik.
@@ -47,7 +50,8 @@ npm run dev
 Buka http://localhost:3000.
 
 Akun demo (sudah berisi data contoh: 2 project, 10 task yang mencakup semua
-status/prioritas, sebagian terlambat dan mendekati tenggat):
+status/prioritas, sebagian terlambat dan mendekati tenggat; data berada di
+**personal workspace** akun demo):
 
 - Email: `demo@davt.test`
 - Password: `Password123!`
@@ -95,13 +99,21 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
   `${BACKEND_API_URL}/storage/:path*` (signed URL lampiran task).
 - **Route protection** (`proxy.ts`, pengganti `middleware` di Next 16):
   membaca cookie `davt_token`; redirect ke `/login` bila belum masuk dan ke
-  `/dashboard` bila sudah masuk tetapi membuka `/login` `/register`.
+  `/dashboard` bila sudah masuk tetapi membuka `/login` `/register`. Rute baru
+  `workspaces/*` dan `invitations/*` ikut dilindungi.
 - **Auth** (`lib/auth.ts`, `components/providers/auth-provider.tsx`): token
   disimpan di cookie `davt_token` (dibaca oleh proxy) dan user di
   `localStorage`. API client otomatis menyegarkan token lewat
   `POST /auth/refresh` saat menerima 401.
 - **API client** (`lib/api.ts`): `request<T>()` terpusat, error divalidasi
   menjadi `ApiError` (pesan + `errors` per field dari respons 422 Laravel).
+  Client menyisipkan header `X-Workspace-Id` dari workspace aktif.
+- **Workspace context** (`components/providers/workspace-provider.tsx`,
+  `lib/workspace.ts`): memuat daftar workspace dari `/me`, menyimpan workspace
+  aktif di `localStorage` (`davt_workspace`), memuat anggota workspace aktif, dan
+  menyediakan helper peran (`managesWorkspace`, `contributesToWorkspace`).
+  Berganti workspace me-*remount* konten (`<main key={activeWorkspaceId}>`)
+  agar halaman memuat ulang data.
 - **Halaman data** adalah Client Component (`"use client"`) yang mengambil data
   dari API; validasi form memakai Zod (`lib/validation.ts`) dan selaras dengan
   aturan backend (mis. `Blocked` wajib `blocked_reason`).
@@ -111,14 +123,16 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 ```
 app/
   (auth)/         # login, register (layout tanpa shell)
-  (app)/          # area terproteksi: dashboard, projects, tasks, profile
-lib/              # api, auth, validation, types, enums, utils
+  (app)/          # area terproteksi: dashboard, projects, tasks, profile,
+                  #   workspaces/[id], invitations/[token]
+lib/              # api, auth, validation, types, enums, workspace, utils
 components/
-  layout/         # app shell (sidebar + topbar)
-  providers/      # AuthProvider
+  layout/         # app shell (sidebar + topbar), workspace switcher
+  providers/      # AuthProvider, WorkspaceProvider
   ui/             # primitif UI (Button, Input, Modal, dll.)
-  tasks/          # badge, list item, kanban, form
+  tasks/          # badge, list item, kanban, form, assignee chip
   projects/       # card, form
+  workspaces/     # workspace form, invite form
   dashboard/      # stat card
 tests/            # unit test Vitest
 docs/             # ERD, deployment, screenshots
@@ -130,12 +144,15 @@ docker-compose.yml
 ## Catatan backend
 
 - Endpoint: `/api/v1` (lihat `backend_devt/routes/api.php`).
+- Project & task berada di dalam **workspace**; permintaan menyertakan header
+  `X-Workspace-Id` (bila kosong, backend memakai personal workspace user).
+  Non-anggota → `403`, workspace tidak dikenal → `404`.
 - Nilai enum harus persis, mis. status task `Backlog | To Do | In Progress |
-  In Review | Blocked | Done`.
+  In Review | Blocked | Done`; peran workspace `Owner | Admin | Member | Viewer`.
 - Pencarian teks dilakukan di sisi klien terhadap halaman yang sedang tampil,
   karena endpoint list belum mendukung parameter `search`. Gunakan filter
-  server-side (status/prioritas/tipe/project/tanggal) untuk mempersempit data
-  lintas halaman.
+  server-side (status/prioritas/tipe/project/assignee/tanggal) untuk
+  mempersempit data lintas halaman.
 - Pagination memakai `meta.current_page` / `meta.last_page` (link dari backend
   menunjuk ke `localhost:8000`, jadi tidak dipakai).
 - Filter deadline memakai parameter `due_before`/`due_after`; hasilnya dirapikan

@@ -5,6 +5,7 @@ Kontrak REST API Laravel yang dikonsumsi frontend. Semua endpoint memakai prefix
 
 - **Base URL (lokal):** `http://localhost:8000/api/v1`
 - **Autentikasi:** JWT bearer (`Authorization: Bearer <access_token>`)
+- **Workspace aktif:** header `X-Workspace-Id` (lihat §4)
 - **Format:** JSON (`Content-Type: application/json`, `Accept: application/json`)
 
 > Frontend **tidak** memanggil backend secara langsung. Browser memakai path
@@ -65,6 +66,12 @@ nama case tanpa pemisah (mis. `in_progress`, `In Progress`, `InProgress`).
 | `TaskPriority` | `Low`, `Medium`, `High`, `Critical` |
 | `TaskType` | `Feature`, `Bug`, `Maintenance`, `Support`, `Research` |
 | `ProjectStatus` | `Active`, `On Hold`, `Completed`, `Archived` |
+| `UserRole` | `Admin`, `User` (peran platform; default `User`) |
+| `WorkspaceRole` | `Owner`, `Admin`, `Member`, `Viewer` (peran per-workspace) |
+
+`UserRole` mengatur hak platform (super-admin). Peran kolaborasi tim disimpan
+per-workspace pada `workspace_members.role` (`WorkspaceRole`) dan dikirim sebagai
+`role` pada resource workspace/member.
 
 Timestamp dikirim format ISO 8601 (UTC); tanggal (`due_date`, `start_date`)
 format `YYYY-MM-DD`.
@@ -90,9 +97,92 @@ format `YYYY-MM-DD`.
 **`POST /login`** — body: `email`, `password`. Response sama seperti di atas.
 Kredensial salah → `401 {"message":"Invalid credentials."}`.
 
-**`GET /me`** → `{"data":{"id":1,"name":"Demo User","email":"demo@davt.test","email_verified_at":null,"created_at":"..."}}`.
+**`GET /me`** mengembalikan profil, peran platform (`role`), dan daftar
+workspace yang diikuti (`workspaces[]`):
 
-## 4. Projects
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Demo User",
+    "email": "demo@davt.test",
+    "email_verified_at": null,
+    "role": "User",
+    "workspaces": [
+      { "id": 1, "name": "Demo User", "slug": "demo-user", "is_personal": true, "role": "Owner" },
+      { "id": 4, "name": "Tim Produk", "slug": "tim-produk", "is_personal": false, "role": "Admin" }
+    ],
+    "created_at": "2026-10-14T01:56:44+00:00"
+  }
+}
+```
+
+## 4. Workspace aktif (`X-Workspace-Id`)
+
+Semua project dan task berada di dalam sebuah **workspace**. Selain token,
+endpoint yang menyentuh project/task/dashboard/report memerlukan header:
+
+```
+X-Workspace-Id: 4
+```
+
+Aturan resolusi workspace aktif (middleware `active.workspace`):
+
+- Bila header dikirim: workspace harus ada (`404` bila tidak) dan user harus
+  menjadi anggotanya (`403` bila bukan anggota).
+- Bila header **tidak** dikirim: backend memakai **personal workspace** user.
+- Peran per-workspace (`Owner`/`Admin`/`Member`/`Viewer`) menentukan izin:
+  - Lihat data: semua anggota.
+  - Buat/ubah project & task: `contributes` (bukan `Viewer`).
+  - Hapus project/kelola anggota/undang: `managesWorkspace` (`Owner` atau `Admin`).
+
+Frontend menyimpan workspace aktif di `localStorage` (`davt_workspace`) dan
+mengirimnya otomatis lewat header ini (`lib/api.ts`).
+
+## 5. Workspaces
+
+| Method | Endpoint | Fungsi |
+| --- | --- | --- |
+| GET | `/workspaces` | Daftar workspace user (tanpa paginasi) |
+| POST | `/workspaces` | Buat workspace tim (`201`) |
+| GET | `/workspaces/{id}` | Detail workspace |
+| PUT / PATCH | `/workspaces/{id}` | Ubah nama workspace |
+| DELETE | `/workspaces/{id}` | Hapus workspace (`204`; `409` bila masih punya project) |
+| GET | `/workspaces/{id}/members` | Daftar anggota |
+| PATCH | `/workspaces/{id}/members/{user}` | Ubah peran anggota |
+| DELETE | `/workspaces/{id}/members/{user}` | Keluarkan anggota (`204`) |
+| GET | `/workspaces/{id}/invitations` | Daftar undangan pending |
+| POST | `/workspaces/{id}/invitations` | Undang via email (`201`) |
+| DELETE | `/workspaces/{id}/invitations/{invitation}` | Cabut undangan (`204`) |
+| POST | `/invitations/{token}/accept` | Terima undangan (`200`) |
+
+Resource workspace:
+
+```json
+{ "data": { "id": 4, "name": "Tim Produk", "slug": "tim-produk", "is_personal": false, "role": "Owner", "members_count": 3 } }
+```
+
+Resource anggota (`/members`):
+
+```json
+{ "data": [ { "id": 9, "user_id": 5, "name": "Test User", "email": "test@example.com", "role": "Member", "joined_at": "2026-10-15T04:00:00+00:00" } ] }
+```
+
+- **Buat workspace** — body: `name` (required ≤150). Pembuat otomatis menjadi
+  `Owner`; `slug` dibuat dari nama (+sufiks numerik bila bentrok).
+- **Ubah peran** — body: `role` (enum `WorkspaceRole`, **bukan** `Owner`).
+- **Undang** — body: `email` (required, ≤255), `role` (default `Member`, tidak
+  boleh `Owner`). Ditolak `422` bila email sudah jadi anggota atau sudah punya
+  undangan pending. Undangan berlaku **7 hari**; email dikirim via mailer
+  (driver `log` pada dev).
+- **Terima undangan** — `POST /invitations/{token}/accept` (tanpa header
+  workspace). Email user harus sama dengan email undangan (`403`); undangan
+  tidak pending/kedaluwarsa → `410`. Respons mengembalikan workspace yang
+  diikuti.
+- **Hapus** — diblokir (`409`) bila workspace masih punya project; workspace
+  personal tidak dapat dihapus.
+
+## 6. Projects
 
 | Method | Endpoint | Fungsi |
 | --- | --- | --- |
@@ -112,7 +202,9 @@ Resource project:
 ```json
 {
   "id": 1,
+  "workspace_id": 4,
   "user_id": 1,
+  "created_by": 1,
   "name": "Demo Project",
   "description": "Project percobaan",
   "status": "Active",
@@ -124,11 +216,16 @@ Resource project:
 }
 ```
 
+`/projects` dan `/projects/{id}` selalu ter-scope ke workspace aktif
+(`X-Workspace-Id`). Project di luar workspace aktif tidak terlihat; mengaksesnya
+langsung → `404`.
+
 > **Kebijakan hapus:** `DELETE` melakukan hard delete dan gagal (`409`) jika
 > project masih memiliki task. Untuk menonaktifkan project tanpa kehilangan data,
-> ubah `status` menjadi `Archived`.
+> ubah `status` menjadi `Archived`. Izin hapus: `managesWorkspace` **atau**
+> pembuat project (`created_by`).
 
-## 5. Tasks
+## 7. Tasks
 
 | Method | Endpoint | Fungsi |
 | --- | --- | --- |
@@ -149,7 +246,9 @@ Body create: `project_id` (required pada `POST /tasks`), `title` (required ≤20
 `type` (required enum `TaskType`), `description` (nullable), `status`
 (default `Backlog`), `priority` (default `Medium`), `due_date` (nullable),
 `estimated_hours` / `actual_hours` (nullable, ≥0), `parent_task_id` (nullable,
-harus satu project), `blocked_reason` (**wajib bila `status=Blocked`**).
+harus satu project), `assignee_id` (nullable, harus `user_id` anggota workspace
+**sama** dengan project task; `422` bila bukan anggota), `blocked_reason`
+(**wajib bila `status=Blocked`**).
 
 Body update menerima field yang sama secara parsial (`sometimes`).
 `PATCH /tasks/{id}/status` → `{ "status": "...", "blocked_reason": "..." }`.
@@ -169,6 +268,7 @@ Resource task (dengan `project` ter-load):
   "created_by": 1,
   "updated_by": null,
   "parent_task_id": null,
+  "assignee_id": 5,
   "title": "Implementasi autentikasi JWT",
   "description": "...",
   "type": "Feature",
@@ -181,9 +281,14 @@ Resource task (dengan `project` ter-load):
   "blocked_reason": null,
   "created_at": "2026-10-14T01:56:44+00:00",
   "updated_at": "2026-10-14T01:56:44+00:00",
-  "project": { "id": 1, "name": "Demo Project", "status": "Active" }
+  "project": { "id": 1, "name": "Demo Project", "status": "Active" },
+  "assignee": { "id": 5, "name": "Test User", "email": "test@example.com" }
 }
 ```
+
+`assignee` di-*load* pada `GET /tasks/{id}`; pada list (`GET /tasks`) frontend
+mencocokkan `assignee_id` dengan peta anggota workspace. Task juga ter-scope ke
+workspace aktif.
 
 ### Lampiran (attachments)
 
@@ -231,6 +336,7 @@ Task dapat memiliki foto lampiran: **JPG, PNG, WEBP, atau GIF**, **maksimal
 | `priority` | enum `TaskPriority` |
 | `type` | enum `TaskType` |
 | `project_id` | id project milik user |
+| `assignee_id` | id user (anggota workspace) |
 | `parent_task_id` | id task |
 | `due_before` | date (`<=`) |
 | `due_after` | date (`>=`) |
@@ -249,7 +355,7 @@ GET /api/v1/tasks?status=in_progress&priority=high&project_id=1&due_before=2026-
 > valid). Frontend melakukan pencarian judul di sisi klien pada halaman yang
 > sedang tampil.
 
-## 6. Activity log
+## 8. Activity log
 
 `GET /tasks/{id}/activities` → koleksi log (append-only, tidak bisa diedit via
 CRUD task):
@@ -269,7 +375,7 @@ CRUD task):
 }
 ```
 
-## 7. Dashboard dan laporan
+## 9. Dashboard dan laporan
 
 **`GET /dashboard/summary`** (`data`-only, bukan koleksi resource):
 
@@ -305,7 +411,7 @@ hari ini`, urut tenggat, `limit` 1–50 (default 10). Response: koleksi
 }
 ```
 
-## 8. Status HTTP
+## 10. Status HTTP
 
 | Kode | Arti |
 | --- | --- |
@@ -313,20 +419,27 @@ hari ini`, urut tenggat, `limit` 1–50 (default 10). Response: koleksi
 | `201` | Resource dibuat |
 | `204` | Berhasil tanpa body (delete) |
 | `401` | Belum terautentikasi / kredensial salah |
-| `403` | Akses ditolak (bukan pemilik) |
-| `404` | Resource tidak ditemukan atau bukan milik user |
-| `409` | Konflik (hapus project yang masih punya task) |
+| `403` | Akses ditolak (bukan anggota workspace / bukan pemilik) |
+| `404` | Resource tidak ditemukan, di luar workspace, atau bukan milik user |
+| `409` | Konflik (hapus project yang masih punya task; hapus workspace yang masih punya project) |
+| `410` | Undangan tidak lagi valid (sudah diterima/dicabut/kedaluwarsa) |
 | `422` | Validasi gagal |
 | `429` | Rate limit tercapai |
 
-## 9. Rate limiting
+## 11. Rate limiting
 
 - `POST /login` & `POST /auth/login` → `throttle:login` (5 percobaan/menit per IP).
 - `POST /register` → `throttle:6,1` (6 percobaan/menit).
 
-## 10. Keamanan
+## 12. Keamanan
 
 - Semua endpoint privat memakai guard `auth:api` (JWT).
-- Otorisasi kepemilikan dilakukan lewat `ProjectPolicy` / `TaskPolicy`; user tetap
-  tidak dapat mengakses data milik user lain.
+- Otorisasi berbasis keanggotaan workspace: `ProjectPolicy` / `TaskPolicy` /
+  `WorkspacePolicy` / `WorkspaceInvitationPolicy`. Route model binding
+  (`{project}`, `{task}`, `{attachment}`, `{workspace}`) di-scope ke user aktif,
+  sehingga resource di luar jangkauan → `404` (bukan `403`, agar tidak
+  membocorkan keberadaan data).
+- Peran platform `Admin` **tidak** lagi melewati isolasi workspace untuk
+  endpoint koleksi; bypass dibatasi pada kemampuan baca (`Gate::before` hanya
+  untuk ability berawalan `view`) dan `platform.manage`.
 - Password di-hash; tidak ada password/token yang ditulis ke log.
