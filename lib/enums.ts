@@ -3,6 +3,7 @@ import type {
   TaskPriority,
   TaskStatus,
   TaskType,
+  WorkspaceRole,
 } from "./types";
 
 export const TASK_STATUSES: TaskStatus[] = [
@@ -35,6 +36,44 @@ export const PROJECT_STATUSES: ProjectStatus[] = [
   "Completed",
   "Archived",
 ];
+
+export const WORKSPACE_ROLES: WorkspaceRole[] = [
+  "Owner",
+  "Admin",
+  "Member",
+  "Viewer",
+];
+
+export const INVITABLE_WORKSPACE_ROLES: WorkspaceRole[] = [
+  "Admin",
+  "Member",
+  "Viewer",
+];
+
+export const WORKSPACE_ROLE_LABELS: Record<WorkspaceRole, string> = {
+  Owner: "Owner",
+  Admin: "Admin",
+  Member: "Member",
+  Viewer: "Viewer",
+};
+
+export const WORKSPACE_ROLE_DESCRIPTIONS: Record<WorkspaceRole, string> = {
+  Owner: "Pemilik workspace, akses penuh.",
+  Admin: "Dapat mengelola anggota dan pengaturan.",
+  Member: "Dapat membuat dan mengubah project serta task.",
+  Viewer: "Hanya dapat melihat, tidak dapat mengubah.",
+};
+
+export const WORKSPACE_ROLE_STYLES: Record<WorkspaceRole, string> = {
+  Owner:
+    "bg-violet-100 text-violet-700 ring-violet-500/20 dark:bg-violet-500/15 dark:text-violet-300",
+  Admin:
+    "bg-blue-100 text-blue-700 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-300",
+  Member:
+    "bg-zinc-100 text-zinc-700 ring-zinc-500/20 dark:bg-zinc-800 dark:text-zinc-300",
+  Viewer:
+    "bg-amber-100 text-amber-800 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300",
+};
 
 export const STATUS_STYLES: Record<TaskStatus, string> = {
   Backlog: "bg-zinc-100 text-zinc-700 ring-zinc-500/20 dark:bg-zinc-800 dark:text-zinc-300",
@@ -96,6 +135,7 @@ export const FIELD_LABELS: Record<string, string> = {
   estimated_hours: "Estimasi jam",
   actual_hours: "Aktual jam",
   parent_task_id: "Parent task",
+  assignee_id: "Penanggung jawab",
   blocked_reason: "Alasan terblokir",
   attachment: "Lampiran",
 };

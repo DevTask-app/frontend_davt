@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useWorkspace } from "@/components/providers/workspace-provider";
+import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
 import { Button } from "@/components/ui/button";
 import { cn, initials } from "@/lib/utils";
 
@@ -21,6 +23,7 @@ function isActive(pathname: string, href: string): boolean {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { activeWorkspaceId } = useWorkspace();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
@@ -103,7 +106,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               ☰
             </Button>
-            <h1 className="text-base font-semibold">{activeLabel}</h1>
+            <WorkspaceSwitcher />
+            <h1 className="hidden text-base font-semibold sm:block">
+              {activeLabel}
+            </h1>
           </div>
 
           <div className="relative">
@@ -144,7 +150,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <main
+          key={activeWorkspaceId ?? "none"}
+          className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+        >
           {children}
         </main>
       </div>

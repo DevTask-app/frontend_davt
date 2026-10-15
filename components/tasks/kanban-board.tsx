@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AssigneeChip } from "./assignee";
 import { PriorityBadge, TypeBadge } from "./task-badges";
 import { Button } from "@/components/ui/button";
 import { TASK_STATUSES, STATUS_STYLES } from "@/lib/enums";
@@ -106,6 +107,7 @@ export function KanbanBoard({
                   >
                     {task.due_date ? formatDate(task.due_date) : "Tanpa tenggat"}
                   </p>
+                  <AssigneeChip id={task.assignee_id} className="mt-2" />
                 </article>
               ))}
 

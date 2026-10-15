@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AssigneeChip } from "./assignee";
 import { PriorityBadge, StatusBadge, TypeBadge } from "./task-badges";
 import { cn, formatDate, isOverdue, relativeDay } from "@/lib/utils";
 import type { Task } from "@/lib/types";
@@ -20,6 +21,7 @@ export function TaskListItem({ task }: { task: Task }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <AssigneeChip id={task.assignee_id} />
         <TypeBadge type={task.type} />
         <PriorityBadge priority={task.priority} />
         <StatusBadge status={task.status} />

@@ -17,17 +17,57 @@ export type TaskType =
 
 export type ProjectStatus = "Active" | "On Hold" | "Completed" | "Archived";
 
+export type UserRole = "Admin" | "User";
+
+export type WorkspaceRole = "Owner" | "Admin" | "Member" | "Viewer";
+
 export interface User {
   id: number;
   name: string;
   email: string;
+  role?: UserRole;
   email_verified_at: string | null;
+  created_at: string | null;
+  workspaces?: Workspace[];
+}
+
+export interface Workspace {
+  id: number;
+  name: string;
+  slug: string;
+  is_personal: boolean;
+  role: WorkspaceRole | null;
+  members_count?: number;
+  projects_count?: number;
+  created_at: string | null;
+}
+
+export interface WorkspaceMember {
+  id: number;
+  name: string;
+  email: string;
+  role: WorkspaceRole | null;
+  joined_at: string | null;
+}
+
+export interface WorkspaceInvitation {
+  id: number;
+  workspace_id: number;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  is_pending: boolean;
+  expires_at: string | null;
+  accepted_at: string | null;
+  invited_by?: User;
   created_at: string | null;
 }
 
 export interface Project {
   id: number;
   user_id: number;
+  workspace_id: number;
+  created_by: number;
   name: string;
   description: string | null;
   status: ProjectStatus;
@@ -44,6 +84,7 @@ export interface Task {
   project_id: number;
   created_by: number;
   updated_by: number | null;
+  assignee_id: number | null;
   parent_task_id: number | null;
   title: string;
   description: string | null;
@@ -58,6 +99,7 @@ export interface Task {
   created_at: string | null;
   updated_at: string | null;
   project?: Project;
+  assignee?: User;
   subtasks?: Task[];
   activity_logs?: TaskActivityLog[];
   attachments?: TaskAttachment[];

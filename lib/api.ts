@@ -12,9 +12,23 @@ import type {
   TaskType,
   User,
   WeeklyReport,
+  Workspace,
+  WorkspaceInvitation,
+  WorkspaceMember,
+  WorkspaceRole,
 } from "./types";
 
 const API_BASE = "/api/backend";
+
+let activeWorkspaceId: number | null = null;
+
+export function setActiveWorkspaceId(id: number | null): void {
+  activeWorkspaceId = id;
+}
+
+export function getActiveWorkspaceId(): number | null {
+  return activeWorkspaceId;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -118,6 +132,9 @@ async function request<T>(
   if (auth) {
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
+    if (activeWorkspaceId !== null) {
+      headers["X-Workspace-Id"] = String(activeWorkspaceId);
+    }
   }
 
   const response = await fetch(buildUrl(path, query), {
@@ -193,6 +210,82 @@ export const api = {
     return request<{ data: User }>("/me");
   },
 
+  // Workspaces
+  listWorkspaces() {
+    return request<{ data: Workspace[] }>("/workspaces");
+  },
+
+  getWorkspace(id: number | string) {
+    return request<{ data: Workspace }>(`/workspaces/${id}`);
+  },
+
+  createWorkspace(input: { name: string }) {
+    return request<{ data: Workspace }>("/workspaces", {
+      method: "POST",
+      body: input,
+    });
+  },
+
+  updateWorkspace(id: number | string, input: { name: string }) {
+    return request<{ data: Workspace }>(`/workspaces/${id}`, {
+      method: "PATCH",
+      body: input,
+    });
+  },
+
+  deleteWorkspace(id: number | string) {
+    return request<void>(`/workspaces/${id}`, { method: "DELETE" });
+  },
+
+  listWorkspaceMembers(id: number | string) {
+    return request<{ data: WorkspaceMember[] }>(`/workspaces/${id}/members`);
+  },
+
+  updateWorkspaceMember(
+    id: number | string,
+    memberId: number | string,
+    input: { role: WorkspaceRole },
+  ) {
+    return request<{ data: WorkspaceMember }>(
+      `/workspaces/${id}/members/${memberId}`,
+      { method: "PATCH", body: input },
+    );
+  },
+
+  removeWorkspaceMember(id: number | string, memberId: number | string) {
+    return request<void>(`/workspaces/${id}/members/${memberId}`, {
+      method: "DELETE",
+    });
+  },
+
+  listWorkspaceInvitations(id: number | string) {
+    return request<{ data: WorkspaceInvitation[] }>(
+      `/workspaces/${id}/invitations`,
+    );
+  },
+
+  createWorkspaceInvitation(
+    id: number | string,
+    input: { email: string; role: WorkspaceRole },
+  ) {
+    return request<{ data: WorkspaceInvitation }>(
+      `/workspaces/${id}/invitations`,
+      { method: "POST", body: input },
+    );
+  },
+
+  revokeWorkspaceInvitation(id: number | string, invitationId: number | string) {
+    return request<void>(`/workspaces/${id}/invitations/${invitationId}`, {
+      method: "DELETE",
+    });
+  },
+
+  acceptWorkspaceInvitation(token: string) {
+    return request<{ data: Workspace }>(`/invitations/${token}/accept`, {
+      method: "POST",
+    });
+  },
+
   // Dashboard
   dashboardSummary() {
     return request<{ data: DashboardSummary }>("/dashboard/summary");
@@ -257,6 +350,7 @@ export const api = {
       priority: TaskPriority;
       type: TaskType;
       project_id: number;
+      assignee_id: number;
       due_before: string;
       due_after: string;
       sort: string;
@@ -292,6 +386,7 @@ export const api = {
     estimated_hours?: number | string | null;
     parent_task_id?: number | null;
     blocked_reason?: string | null;
+    assignee_id?: number | null;
   }) {
     return request<{ data: Task }>("/tasks", { method: "POST", body: input });
   },
@@ -327,6 +422,7 @@ export const api = {
       actual_hours: number | string | null;
       parent_task_id: number | null;
       blocked_reason: string | null;
+      assignee_id: number | null;
     }>,
   ) {
     return request<{ data: Task }>(`/tasks/${id}`, {

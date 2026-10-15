@@ -12,6 +12,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
+import { useWorkspace } from "@/components/providers/workspace-provider";
 import type {
   Paginated,
   Project,
@@ -27,6 +28,7 @@ interface Filters {
   priority: string;
   type: string;
   project_id: string;
+  assignee_id: string;
   sort: string;
   direction: "asc" | "desc";
 }
@@ -39,6 +41,7 @@ const INITIAL_FILTERS: Filters = {
   priority: "",
   type: "",
   project_id: "",
+  assignee_id: "",
   sort: "created_at",
   direction: "desc",
 };
@@ -51,6 +54,7 @@ function addDays(iso: string, days: number): string {
 
 export default function TasksPage() {
   const router = useRouter();
+  const { members } = useWorkspace();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
@@ -86,6 +90,7 @@ export default function TasksPage() {
         priority: (filters.priority || undefined) as TaskPriority | undefined,
         type: (filters.type || undefined) as TaskType | undefined,
         project_id: filters.project_id ? Number(filters.project_id) : undefined,
+        assignee_id: filters.assignee_id ? Number(filters.assignee_id) : undefined,
         due_before:
           deadline === "overdue"
             ? today
@@ -220,6 +225,7 @@ export default function TasksPage() {
     filters.priority ||
     filters.type ||
     filters.project_id ||
+    filters.assignee_id ||
     deadline ||
     search;
 
@@ -289,6 +295,19 @@ export default function TasksPage() {
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            className="max-w-xs"
+            value={filters.assignee_id}
+            onChange={(event) => updateFilter("assignee_id", event.target.value)}
+          >
+            <option value="">Semua penanggung jawab</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
               </option>
             ))}
           </Select>

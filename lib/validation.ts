@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  INVITABLE_WORKSPACE_ROLES,
   PROJECT_STATUSES,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -10,6 +11,7 @@ import type {
   TaskPriority,
   TaskStatus,
   TaskType,
+  WorkspaceRole,
 } from "./types";
 
 const projectStatusSchema = z.enum(
@@ -20,6 +22,9 @@ const taskPrioritySchema = z.enum(
   TASK_PRIORITIES as [TaskPriority, ...TaskPriority[]],
 );
 const taskTypeSchema = z.enum(TASK_TYPES as [TaskType, ...TaskType[]]);
+const invitRoleSchema = z.enum(
+  INVITABLE_WORKSPACE_ROLES as [WorkspaceRole, ...WorkspaceRole[]],
+);
 
 const emptyToNull = (value: unknown): unknown =>
   value === "" || value === undefined ? null : value;
@@ -43,6 +48,16 @@ const optionalNumber = z.preprocess(
   z.coerce
     .number({ message: "Harus berupa angka" })
     .min(0, "Tidak boleh negatif")
+    .nullable()
+    .optional(),
+);
+
+const optionalId = z.preprocess(
+  (value) => (value === "" || value === undefined || value === null ? null : value),
+  z.coerce
+    .number()
+    .int()
+    .positive()
     .nullable()
     .optional(),
 );
@@ -112,6 +127,7 @@ export const taskSchema = z
     due_date: optionalDate,
     estimated_hours: optionalNumber,
     actual_hours: optionalNumber,
+    assignee_id: optionalId,
     blocked_reason: optionalText,
   })
   .superRefine((data, ctx) => {
@@ -127,10 +143,27 @@ export const taskSchema = z
     }
   });
 
+export const workspaceSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Nama workspace wajib diisi")
+    .max(150, "Maksimal 150 karakter"),
+});
+
+export const invitationSchema = z.object({
+  email: z
+    .string()
+    .min(1, "Email wajib diisi")
+    .email("Format email tidak valid"),
+  role: invitRoleSchema,
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ProjectInput = z.infer<typeof projectSchema>;
 export type TaskInput = z.infer<typeof taskSchema>;
+export type WorkspaceInput = z.infer<typeof workspaceSchema>;
+export type InvitationInput = z.infer<typeof invitationSchema>;
 
 export function zodFieldErrors(error: z.ZodError): Record<string, string> {
   const result: Record<string, string> = {};

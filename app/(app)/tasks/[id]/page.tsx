@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { AssigneeChip } from "@/components/tasks/assignee";
 import { PriorityBadge, StatusBadge, TypeBadge } from "@/components/tasks/task-badges";
 import { TaskForm } from "@/components/tasks/task-form";
+import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
@@ -33,6 +35,7 @@ export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const taskId = params.id;
+  const { members, membersById } = useWorkspace();
 
   const [task, setTask] = useState<Task | null>(null);
   const [activities, setActivities] = useState<TaskActivityLog[]>([]);
@@ -99,6 +102,28 @@ export default function TaskDetailPage() {
     } catch (err) {
       setActionError(
         err instanceof ApiError ? err.firstError() : "Gagal mengubah prioritas.",
+      );
+    } finally {
+      setSavingField(false);
+    }
+  }
+
+  async function changeAssignee(value: string) {
+    if (!task) return;
+    setSavingField(true);
+    setActionError(null);
+    try {
+      const response = await api.updateTask(task.id, {
+        assignee_id: value === "" ? null : Number(value),
+      });
+      setTask(response.data);
+      const activityRes = await api.taskActivities(task.id);
+      setActivities(activityRes.data);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError
+          ? err.firstError()
+          : "Gagal mengubah penanggung jawab.",
       );
     } finally {
       setSavingField(false);
@@ -172,6 +197,14 @@ export default function TaskDetailPage() {
     }
   }
 
+  function fieldValue(field: string, value: unknown): string {
+    if (field === "assignee_id") {
+      if (value === null || value === undefined || value === "") return "—";
+      return membersById.get(Number(value))?.name ?? `Anggota #${value}`;
+    }
+    return humanizeFieldValue(field, value);
+  }
+
   if (loading) return <Spinner label="Memuat task…" />;
   if (error) return <ErrorBanner message={error} />;
   if (!task) return null;
@@ -201,6 +234,7 @@ export default function TaskDetailPage() {
               <StatusBadge status={task.status} />
               <PriorityBadge priority={task.priority} />
               <TypeBadge type={task.type} />
+              <AssigneeChip id={task.assignee_id} />
               {task.project ? (
                 <Link
                   href={`/projects/${task.project.id}`}
@@ -335,14 +369,14 @@ export default function TaskDetailPage() {
                             {Object.entries(activity.changes).map(
                               ([field, change]) => (
                                 <li key={field}>
-                                  {FIELD_LABELS[field] ?? field}:{" "}
-                                  <span className="line-through">
-                                    {humanizeFieldValue(field, change.old)}
-                                  </span>{" "}
-                                  →{" "}
-                                  <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                                    {humanizeFieldValue(field, change.new)}
-                                  </span>
+                                   {FIELD_LABELS[field] ?? field}:{" "}
+                                   <span className="line-through">
+                                     {fieldValue(field, change.old)}
+                                   </span>{" "}
+                                   →{" "}
+                                   <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                                     {fieldValue(field, change.new)}
+                                   </span>
                                 </li>
                               ),
                             )}
@@ -397,6 +431,23 @@ export default function TaskDetailPage() {
                 ))}
               </Select>
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Penanggung jawab
+              </label>
+              <Select
+                value={task.assignee_id === null ? "" : String(task.assignee_id)}
+                disabled={savingField}
+                onChange={(event) => changeAssignee(event.target.value)}
+              >
+                <option value="">Belum ditugaskan</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </Card>
 
           <Card className="p-4">
@@ -416,6 +467,18 @@ export default function TaskDetailPage() {
                 <dt className="text-zinc-500 dark:text-zinc-400">Realisasi</dt>
                 <dd>
                   {task.actual_hours ? `${task.actual_hours} jam` : "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-zinc-500 dark:text-zinc-400">
+                  Penanggung jawab
+                </dt>
+                <dd>
+                  {task.assignee_id ? (
+                    <AssigneeChip id={task.assignee_id} />
+                  ) : (
+                    "—"
+                  )}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">

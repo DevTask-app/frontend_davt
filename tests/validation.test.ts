@@ -148,4 +148,20 @@ describe("taskSchema", () => {
     const result = taskSchema.safeParse({ ...base, project_id: "0" });
     expect(result.success).toBe(false);
   });
+
+  it("coerces an empty assignee to null", () => {
+    const result = taskSchema.safeParse({ ...base, assignee_id: "" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.assignee_id).toBeNull();
+    }
+  });
+
+  it("coerces a numeric assignee id", () => {
+    const result = taskSchema.safeParse({ ...base, assignee_id: "7" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.assignee_id).toBe(7);
+    }
+  });
 });

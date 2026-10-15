@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { ErrorBanner } from "@/components/ui/feedback";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { useWorkspace } from "@/components/providers/workspace-provider";
 import { api, ApiError } from "@/lib/api";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
 import type { Project, Task } from "@/lib/types";
@@ -32,6 +33,7 @@ const EMPTY = {
   due_date: "",
   estimated_hours: "",
   actual_hours: "",
+  assignee_id: "",
   blocked_reason: "",
 };
 
@@ -44,6 +46,7 @@ export function TaskForm({
   onClose,
   onSaved,
 }: TaskFormProps) {
+  const { members } = useWorkspace();
   const [values, setValues] = useState(() =>
     task
       ? {
@@ -58,6 +61,7 @@ export function TaskForm({
             task.estimated_hours === null ? "" : String(task.estimated_hours),
           actual_hours:
             task.actual_hours === null ? "" : String(task.actual_hours),
+          assignee_id: task.assignee_id === null ? "" : String(task.assignee_id),
           blocked_reason: task.blocked_reason ?? "",
         }
       : {
@@ -127,6 +131,7 @@ export function TaskForm({
             due_date: data.due_date,
             estimated_hours: data.estimated_hours,
             actual_hours: data.actual_hours,
+            assignee_id: data.assignee_id ?? null,
             blocked_reason: data.blocked_reason,
           })
         : await api.createTask({
@@ -138,6 +143,7 @@ export function TaskForm({
             priority: data.priority,
             due_date: data.due_date,
             estimated_hours: data.estimated_hours,
+            assignee_id: data.assignee_id ?? null,
             blocked_reason: data.blocked_reason,
           });
 
@@ -253,6 +259,25 @@ export function TaskForm({
             </Select>
           </Field>
         </div>
+
+        <Field
+          label="Penanggung jawab"
+          htmlFor="t-assignee"
+          error={errors.assignee_id}
+        >
+          <Select
+            id="t-assignee"
+            value={values.assignee_id}
+            onChange={(event) => update("assignee_id", event.target.value)}
+          >
+            <option value="">Belum ditugaskan</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Tenggat" htmlFor="t-due" error={errors.due_date}>

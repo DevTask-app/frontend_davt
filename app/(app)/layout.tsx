@@ -4,7 +4,11 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/components/providers/auth-provider";
-import { Spinner } from "@/components/ui/feedback";
+import {
+  WorkspaceProvider,
+  useWorkspace,
+} from "@/components/providers/workspace-provider";
+import { ErrorBanner, Spinner } from "@/components/ui/feedback";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -26,6 +30,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (!user) {
     return null;
+  }
+
+  return (
+    <WorkspaceProvider>
+      <WorkspaceGate>{children}</WorkspaceGate>
+    </WorkspaceProvider>
+  );
+}
+
+function WorkspaceGate({ children }: { children: ReactNode }) {
+  const { loading, error } = useWorkspace();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <Spinner label="Memuat workspace…" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md items-center px-4">
+        <ErrorBanner message={error} />
+      </div>
+    );
   }
 
   return <AppShell>{children}</AppShell>;
