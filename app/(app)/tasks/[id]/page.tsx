@@ -7,6 +7,7 @@ import { AssigneeChip } from "@/components/tasks/assignee";
 import { PriorityBadge, StatusBadge, TypeBadge } from "@/components/tasks/task-badges";
 import { TaskForm } from "@/components/tasks/task-form";
 import { useWorkspace } from "@/components/providers/workspace-provider";
+import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
@@ -30,12 +31,18 @@ import {
   storagePath,
   validateImageFile,
 } from "@/lib/utils";
+import {
+  canChangeTaskStatus,
+  canEditTaskDetails,
+  canManageTaskAttachments,
+} from "@/lib/workspace";
 
 export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const taskId = params.id;
-  const { members, membersById } = useWorkspace();
+  const { members, membersById, activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
 
   const [task, setTask] = useState<Task | null>(null);
   const [activities, setActivities] = useState<TaskActivityLog[]>([]);
@@ -209,6 +216,12 @@ export default function TaskDetailPage() {
   if (error) return <ErrorBanner message={error} />;
   if (!task) return null;
 
+  const role = activeWorkspace?.role;
+  const canEdit = canEditTaskDetails(role);
+  const canChangeStatus = canChangeTaskStatus(role, task, user?.id);
+  const canAttach = canManageTaskAttachments(role, task, user?.id);
+  const canDelete = canEdit || task.created_by === user?.id;
+
   const attachments = task.attachments ?? [];
 
   return (
@@ -245,18 +258,28 @@ export default function TaskDetailPage() {
               ) : null}
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              Edit
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => setDeleteOpen(true)}
-            >
-              Hapus
-            </Button>
-          </div>
+          {canEdit || canDelete ? (
+            <div className="flex gap-2">
+              {canEdit ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditOpen(true)}
+                >
+                  Edit
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  Hapus
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -287,16 +310,18 @@ export default function TaskDetailPage() {
               title="Lampiran"
               description={`${attachments.length} foto terlampir.`}
               action={
-                <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
-                  {uploading ? "Mengunggah…" : "Tambah foto"}
-                  <input
-                    type="file"
-                    accept={ACCEPTED_IMAGE_TYPES.join(",")}
-                    className="hidden"
-                    disabled={uploading}
-                    onChange={handleUpload}
-                  />
-                </label>
+                canAttach ? (
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                    {uploading ? "Mengunggah…" : "Tambah foto"}
+                    <input
+                      type="file"
+                      accept={ACCEPTED_IMAGE_TYPES.join(",")}
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={handleUpload}
+                    />
+                  </label>
+                ) : undefined
               }
             />
             <div className="p-4">
@@ -331,14 +356,16 @@ export default function TaskDetailPage() {
                           {attachment.original_name} ·{" "}
                           {formatFileSize(attachment.size)}
                         </span>
-                        <button
-                          type="button"
-                          disabled={removingId === attachment.id}
-                          onClick={() => removeAttachment(attachment.id)}
-                          className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                        >
-                          Hapus
-                        </button>
+                        {canAttach ? (
+                          <button
+                            type="button"
+                            disabled={removingId === attachment.id}
+                            onClick={() => removeAttachment(attachment.id)}
+                            className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                          >
+                            Hapus
+                          </button>
+                        ) : null}
                       </div>
                     </li>
                   ))}
@@ -403,7 +430,7 @@ export default function TaskDetailPage() {
               </label>
               <Select
                 value={task.status}
-                disabled={savingField}
+                disabled={savingField || !canChangeStatus}
                 onChange={(event) => changeStatus(event.target.value as TaskStatus)}
               >
                 {TASK_STATUSES.map((status) => (
@@ -412,42 +439,51 @@ export default function TaskDetailPage() {
                   </option>
                 ))}
               </Select>
+              {!canChangeStatus ? (
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Hanya penanggung jawab task yang dapat mengubah status.
+                </p>
+              ) : null}
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Prioritas
-              </label>
-              <Select
-                value={task.priority}
-                disabled={savingField}
-                onChange={(event) =>
-                  changePriority(event.target.value as TaskPriority)
-                }
-              >
-                {TASK_PRIORITIES.map((priority) => (
-                  <option key={priority} value={priority}>
-                    {priority}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Penanggung jawab
-              </label>
-              <Select
-                value={task.assignee_id === null ? "" : String(task.assignee_id)}
-                disabled={savingField}
-                onChange={(event) => changeAssignee(event.target.value)}
-              >
-                <option value="">Belum ditugaskan</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {canEdit ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Prioritas
+                </label>
+                <Select
+                  value={task.priority}
+                  disabled={savingField}
+                  onChange={(event) =>
+                    changePriority(event.target.value as TaskPriority)
+                  }
+                >
+                  {TASK_PRIORITIES.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
+            {canEdit ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Penanggung jawab
+                </label>
+                <Select
+                  value={task.assignee_id === null ? "" : String(task.assignee_id)}
+                  disabled={savingField}
+                  onChange={(event) => changeAssignee(event.target.value)}
+                >
+                  <option value="">Belum ditugaskan</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
           </Card>
 
           <Card className="p-4">

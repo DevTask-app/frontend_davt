@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/projects/project-form";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskListItem } from "@/components/tasks/task-list-item";
@@ -12,12 +12,19 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
+import { useWorkspace } from "@/components/providers/workspace-provider";
+import { useAuth } from "@/components/providers/auth-provider";
 import type { Project, Task, TaskStatus } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { canChangeTaskStatus, canEditTaskDetails } from "@/lib/workspace";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const projectId = params.id;
+  const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const canEdit = canEditTaskDetails(activeWorkspace?.role);
 
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -167,11 +174,18 @@ export default function ProjectDetailPage() {
         <KanbanBoard
           tasks={tasks}
           onOpen={(task) => {
-            setEditingTask(task);
-            setTaskFormOpen(true);
+            if (canEdit) {
+              setEditingTask(task);
+              setTaskFormOpen(true);
+              return;
+            }
+            router.push(`/tasks/${task.id}`);
           }}
           onStatusChange={handleStatusChange}
           onAdd={openNewTask}
+          canDrag={(task) =>
+            canChangeTaskStatus(activeWorkspace?.role, task, user?.id)
+          }
         />
       ) : (
         <Card className="space-y-2 p-4">

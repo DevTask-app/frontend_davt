@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canChangeTaskStatus,
+  canEditTaskDetails,
+  canManageTaskAttachments,
   contributesToWorkspace,
   isPersonalWorkspace,
   managesWorkspace,
@@ -35,6 +38,40 @@ describe("role capabilities", () => {
     expect(contributesToWorkspace("Member")).toBe(true);
     expect(contributesToWorkspace("Viewer")).toBe(false);
     expect(contributesToWorkspace(undefined)).toBe(false);
+  });
+});
+
+describe("task permissions", () => {
+  const assigned = { assignee_id: 5 };
+  const unassigned = { assignee_id: null };
+
+  it("lets only Owner and Admin edit task details", () => {
+    expect(canEditTaskDetails("Owner")).toBe(true);
+    expect(canEditTaskDetails("Admin")).toBe(true);
+    expect(canEditTaskDetails("Member")).toBe(false);
+    expect(canEditTaskDetails("Viewer")).toBe(false);
+  });
+
+  it("lets managers change the status of any task", () => {
+    expect(canChangeTaskStatus("Owner", unassigned, 5)).toBe(true);
+    expect(canChangeTaskStatus("Admin", unassigned, 5)).toBe(true);
+  });
+
+  it("lets a member change the status of a task assigned to them", () => {
+    expect(canChangeTaskStatus("Member", assigned, 5)).toBe(true);
+    expect(canChangeTaskStatus("Member", assigned, 6)).toBe(false);
+    expect(canChangeTaskStatus("Member", unassigned, 5)).toBe(false);
+  });
+
+  it("forbids viewers from changing the status", () => {
+    expect(canChangeTaskStatus("Viewer", assigned, 5)).toBe(false);
+  });
+
+  it("mirrors the status rule for attachments", () => {
+    expect(canManageTaskAttachments("Owner", unassigned, 5)).toBe(true);
+    expect(canManageTaskAttachments("Member", assigned, 5)).toBe(true);
+    expect(canManageTaskAttachments("Member", assigned, 6)).toBe(false);
+    expect(canManageTaskAttachments("Viewer", assigned, 5)).toBe(false);
   });
 });
 

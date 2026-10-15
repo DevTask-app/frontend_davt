@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceRole } from "./types";
+import type { Task, Workspace, WorkspaceRole } from "./types";
 
 const STORAGE_KEY = "davt_workspace";
 
@@ -31,6 +31,43 @@ export function contributesToWorkspace(
   role: WorkspaceRole | null | undefined,
 ): boolean {
   return role !== null && role !== undefined && role !== "Viewer";
+}
+
+export function canEditTaskDetails(
+  role: WorkspaceRole | null | undefined,
+): boolean {
+  return managesWorkspace(role);
+}
+
+function isAssignedTo(
+  task: Pick<Task, "assignee_id">,
+  userId: number | null | undefined,
+): boolean {
+  return (
+    typeof userId === "number" &&
+    task.assignee_id !== null &&
+    task.assignee_id !== undefined &&
+    task.assignee_id === userId
+  );
+}
+
+export function canChangeTaskStatus(
+  role: WorkspaceRole | null | undefined,
+  task: Pick<Task, "assignee_id">,
+  userId: number | null | undefined,
+): boolean {
+  return (
+    managesWorkspace(role) ||
+    (contributesToWorkspace(role) && isAssignedTo(task, userId))
+  );
+}
+
+export function canManageTaskAttachments(
+  role: WorkspaceRole | null | undefined,
+  task: Pick<Task, "assignee_id">,
+  userId: number | null | undefined,
+): boolean {
+  return canChangeTaskStatus(role, task, userId);
 }
 
 export function isPersonalWorkspace(

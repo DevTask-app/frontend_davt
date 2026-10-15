@@ -23,6 +23,7 @@ import type {
   TaskType,
 } from "@/lib/types";
 import { isOverdue, todayISO } from "@/lib/utils";
+import { canChangeTaskStatus } from "@/lib/workspace";
 
 interface Filters {
   status: string;
@@ -55,7 +56,7 @@ function addDays(iso: string, days: number): string {
 
 export default function TasksPage() {
   const router = useRouter();
-  const { members } = useWorkspace();
+  const { members, activeWorkspace } = useWorkspace();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
@@ -405,6 +406,9 @@ export default function TasksPage() {
           onOpen={(task) => router.push(`/tasks/${task.id}`)}
           onStatusChange={handleStatusChange}
           onAdd={openNewTask}
+          canDrag={(task) =>
+            canChangeTaskStatus(activeWorkspace?.role, task, user?.id)
+          }
         />
       ) : (
         <>

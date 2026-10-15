@@ -13,6 +13,7 @@ interface KanbanBoardProps {
   onOpen: (task: Task) => void;
   onStatusChange: (task: Task, status: TaskStatus) => void;
   onAdd?: (status: TaskStatus) => void;
+  canDrag?: (task: Task) => boolean;
 }
 
 export function KanbanBoard({
@@ -20,6 +21,7 @@ export function KanbanBoard({
   onOpen,
   onStatusChange,
   onAdd,
+  canDrag,
 }: KanbanBoardProps) {
   const [dragId, setDragId] = useState<number | null>(null);
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
@@ -29,6 +31,7 @@ export function KanbanBoard({
     const task = tasks.find((item) => item.id === dragId);
     setDragId(null);
     if (!task || task.status === status) return;
+    if (canDrag && !canDrag(task)) return;
     onStatusChange(task, status);
   }
 
@@ -78,14 +81,21 @@ export function KanbanBoard({
             </header>
 
             <div className="flex min-h-24 flex-1 flex-col gap-2 p-2">
-              {columnTasks.map((task) => (
+              {columnTasks.map((task) => {
+                const draggable = canDrag ? canDrag(task) : true;
+                return (
                 <article
                   key={task.id}
-                  draggable
+                  draggable={draggable}
                   onDragStart={() => setDragId(task.id)}
                   onDragEnd={() => setDragId(null)}
                   onClick={() => onOpen(task)}
-                  className="cursor-grab rounded-lg border border-zinc-200 bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-800 dark:bg-zinc-900"
+                  className={cn(
+                    "rounded-lg border border-zinc-200 bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900",
+                    draggable
+                      ? "cursor-grab active:cursor-grabbing"
+                      : "cursor-pointer",
+                  )}
                 >
                   <p className="line-clamp-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {task.title}
@@ -109,7 +119,8 @@ export function KanbanBoard({
                   </p>
                   <AssigneeChip id={task.assignee_id} className="mt-2" />
                 </article>
-              ))}
+                );
+              })}
 
               {columnTasks.length === 0 ? (
                 <p className="py-4 text-center text-xs text-zinc-400 dark:text-zinc-600">

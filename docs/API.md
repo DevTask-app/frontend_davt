@@ -133,7 +133,11 @@ Aturan resolusi workspace aktif (middleware `active.workspace`):
 - Bila header **tidak** dikirim: backend memakai **personal workspace** user.
 - Peran per-workspace (`Owner`/`Admin`/`Member`/`Viewer`) menentukan izin:
   - Lihat data: semua anggota.
-  - Buat/ubah project & task: `contributes` (bukan `Viewer`).
+  - Buat project & task: `contributes` (bukan `Viewer`).
+  - Ubah **detail** project & task (judul, deskripsi, prioritas, penanggung
+    jawab, tenggat, jam, tipe): `managesWorkspace` (`Owner` atau `Admin`).
+  - Ubah **status** task: `managesWorkspace`, **atau** `Member` yang merupakan
+    `assignee_id` task tersebut. Kelola lampiran task mengikuti aturan ini.
   - Hapus project/kelola anggota/undang: `managesWorkspace` (`Owner` atau `Admin`).
 
 Frontend menyimpan workspace aktif di `localStorage` (`davt_workspace`) dan
@@ -258,6 +262,15 @@ Aturan bisnis (dijaga backend, atomik):
 - `status=Done` mengisi `completed_at`; keluar dari `Done` mengosongkan kembali.
 - `status=Blocked` mewajibkan `blocked_reason`.
 - Setiap perubahan status/perubahan penting menulis `task_activity_logs`.
+
+Izin task (lihat juga §4):
+
+- `PUT/PATCH /tasks/{id}` dan `PATCH /tasks/{id}/priority` → **hanya**
+  `Owner`/`Admin` (`managesWorkspace`); `Member`/`Viewer` mendapat `403`.
+- `PATCH /tasks/{id}/status` → `Owner`/`Admin` untuk task apa pun, atau
+  `Member` yang menjadi `assignee_id` task tersebut; selain itu `403`.
+- `POST /tasks/{id}/attachments` dan `DELETE /attachments/{id}` mengikuti
+  aturan status di atas.
 
 Resource task (dengan `project` ter-load):
 

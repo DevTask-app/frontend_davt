@@ -115,7 +115,10 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 - **Workspace context** (`components/providers/workspace-provider.tsx`,
   `lib/workspace.ts`): memuat daftar workspace dari `/me`, menyimpan workspace
   aktif di `localStorage` (`davt_workspace`), memuat anggota workspace aktif, dan
-  menyediakan helper peran (`managesWorkspace`, `contributesToWorkspace`).
+  menyediakan helper peran (`managesWorkspace`, `contributesToWorkspace`) dan
+  izin task (`canEditTaskDetails`, `canChangeTaskStatus`,
+  `canManageTaskAttachments`): `Owner`/`Admin` bebas; `Member` hanya boleh
+  mengubah status (dan lampiran) pada task yang di-*assign* ke dirinya.
   Berganti workspace me-*remount* konten (`<main key={activeWorkspaceId}>`)
   agar halaman memuat ulang data.
 - **Halaman data** adalah Client Component (`"use client"`) yang mengambil data
