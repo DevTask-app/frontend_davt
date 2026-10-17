@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BlockedReasonDialog } from "@/components/tasks/blocked-reason-dialog";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskListItem } from "@/components/tasks/task-list-item";
 import { TaskForm } from "@/components/tasks/task-form";
@@ -56,7 +57,7 @@ function addDays(iso: string, days: number): string {
 
 export default function TasksPage() {
   const router = useRouter();
-  const { members, activeWorkspace } = useWorkspace();
+  const { members, activeWorkspace, canContribute } = useWorkspace();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
@@ -73,6 +74,10 @@ export default function TasksPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [defaultStatus, setDefaultStatus] = useState<string>("Backlog");
+  const [blockedRequest, setBlockedRequest] = useState<{
+    task: Task;
+    status: TaskStatus;
+  } | null>(null);
 
   useEffect(() => {
     api
@@ -198,14 +203,18 @@ export default function TasksPage() {
     });
   }
 
-  async function handleStatusChange(task: Task, status: TaskStatus) {
+  async function commitStatusChange(
+    task: Task,
+    status: TaskStatus,
+    blockedReason?: string,
+  ) {
     const previous = tasks;
     setTasks((prev) =>
       prev.map((item) => (item.id === task.id ? { ...item, status } : item)),
     );
     setActionError(null);
     try {
-      const response = await api.updateTaskStatus(task.id, status);
+      const response = await api.updateTaskStatus(task.id, status, blockedReason);
       upsertTask(response.data);
       if (filters.status) reload();
     } catch (err) {
@@ -216,6 +225,14 @@ export default function TasksPage() {
           : "Gagal mengubah status task.",
       );
     }
+  }
+
+  function handleStatusChange(task: Task, status: TaskStatus) {
+    if (status === "Blocked") {
+      setBlockedRequest({ task, status });
+      return;
+    }
+    void commitStatusChange(task, status);
   }
 
   function openNewTask(status: string) {
@@ -244,7 +261,9 @@ export default function TasksPage() {
             {filtered.length} ditampilkan · {meta?.total ?? tasks.length} total.
           </p>
         </div>
-        <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
+        {canContribute ? (
+          <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
+        ) : null}
       </div>
 
       <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -396,16 +415,22 @@ export default function TasksPage() {
           description={
             activeFilters
               ? "Tidak ada task yang cocok dengan filter."
-              : "Buat task pertama Anda."
+              : canContribute
+                ? "Buat task pertama Anda."
+                : "Belum ada task pada workspace ini."
           }
-          action={<Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>}
+          action={
+            canContribute ? (
+              <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
+            ) : undefined
+          }
         />
       ) : view === "board" ? (
         <KanbanBoard
           tasks={filtered}
           onOpen={(task) => router.push(`/tasks/${task.id}`)}
           onStatusChange={handleStatusChange}
-          onAdd={openNewTask}
+          onAdd={canContribute ? openNewTask : undefined}
           canDrag={(task) =>
             canChangeTaskStatus(activeWorkspace?.role, task, user?.id)
           }
@@ -432,7 +457,7 @@ export default function TasksPage() {
         </>
       )}
 
-      {formOpen ? (
+      {formOpen && canContribute ? (
         <TaskForm
           projects={projects}
           task={editingTask}
@@ -448,6 +473,18 @@ export default function TasksPage() {
               reload();
               setPage(1);
             }
+          }}
+        />
+      ) : null}
+
+      {blockedRequest ? (
+        <BlockedReasonDialog
+          taskTitle={blockedRequest.task.title}
+          onCancel={() => setBlockedRequest(null)}
+          onConfirm={(reason) => {
+            const request = blockedRequest;
+            setBlockedRequest(null);
+            void commitStatusChange(request.task, request.status, reason);
           }}
         />
       ) : null}

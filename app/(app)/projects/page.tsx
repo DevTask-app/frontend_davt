@@ -9,11 +9,17 @@ import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/components/providers/auth-provider";
+import { useWorkspace } from "@/components/providers/workspace-provider";
 import type { Paginated, Project } from "@/lib/types";
+import { canDeleteProject, canEditProject } from "@/lib/workspace";
 
 type PaginationMeta = Paginated<Project>["meta"];
 
 export default function ProjectsPage() {
+  const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const canCreate = canEditProject(activeWorkspace?.role);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,7 @@ export default function ProjectsPage() {
             {meta?.total ?? projects.length} project terdaftar.
           </p>
         </div>
-        <Button onClick={openCreate}>Project Baru</Button>
+        {canCreate ? <Button onClick={openCreate}>Project Baru</Button> : null}
       </div>
 
       <Input
@@ -138,9 +144,15 @@ export default function ProjectsPage() {
           description={
             search
               ? "Coba kata kunci lain."
-              : "Buat project pertama untuk mulai menambahkan task."
+              : canCreate
+                ? "Buat project pertama untuk mulai menambahkan task."
+                : "Belum ada project pada workspace ini."
           }
-          action={!search ? <Button onClick={openCreate}>Project Baru</Button> : undefined}
+          action={
+            !search && canCreate ? (
+              <Button onClick={openCreate}>Project Baru</Button>
+            ) : undefined
+          }
         />
       ) : (
         <>
@@ -149,6 +161,12 @@ export default function ProjectsPage() {
               <ProjectCard
                 key={project.id}
                 project={project}
+                canEdit={canEditProject(activeWorkspace?.role)}
+                canDelete={canDeleteProject(
+                  activeWorkspace?.role,
+                  project,
+                  user?.id,
+                )}
                 onEdit={(item) => {
                   setEditing(item);
                   setFormOpen(true);
@@ -172,7 +190,7 @@ export default function ProjectsPage() {
         </>
       )}
 
-      {formOpen ? (
+      {formOpen && canCreate ? (
         <ProjectForm
           project={editing}
           onClose={() => setFormOpen(false)}

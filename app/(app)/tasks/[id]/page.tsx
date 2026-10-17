@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AssigneeChip } from "@/components/tasks/assignee";
+import { BlockedReasonDialog } from "@/components/tasks/blocked-reason-dialog";
 import { PriorityBadge, StatusBadge, TypeBadge } from "@/components/tasks/task-badges";
 import { TaskForm } from "@/components/tasks/task-form";
 import { useWorkspace } from "@/components/providers/workspace-provider";
@@ -55,6 +56,7 @@ export default function TaskDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [blockedStatus, setBlockedStatus] = useState<TaskStatus | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,12 +81,12 @@ export default function TaskDetailPage() {
     };
   }, [taskId]);
 
-  async function changeStatus(status: TaskStatus) {
+  async function changeStatus(status: TaskStatus, blockedReason?: string) {
     if (!task) return;
     setSavingField(true);
     setActionError(null);
     try {
-      const response = await api.updateTaskStatus(task.id, status);
+      const response = await api.updateTaskStatus(task.id, status, blockedReason);
       setTask(response.data);
       const activityRes = await api.taskActivities(task.id);
       setActivities(activityRes.data);
@@ -95,6 +97,14 @@ export default function TaskDetailPage() {
     } finally {
       setSavingField(false);
     }
+  }
+
+  function requestStatusChange(status: TaskStatus) {
+    if (status === "Blocked") {
+      setBlockedStatus(status);
+      return;
+    }
+    void changeStatus(status);
   }
 
   async function changePriority(priority: TaskPriority) {
@@ -431,7 +441,7 @@ export default function TaskDetailPage() {
               <Select
                 value={task.status}
                 disabled={savingField || !canChangeStatus}
-                onChange={(event) => changeStatus(event.target.value as TaskStatus)}
+                onChange={(event) => requestStatusChange(event.target.value as TaskStatus)}
               >
                 {TASK_STATUSES.map((status) => (
                   <option key={status} value={status}>
@@ -551,6 +561,18 @@ export default function TaskDetailPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteOpen(false)}
       />
+
+      {blockedStatus ? (
+        <BlockedReasonDialog
+          taskTitle={task.title}
+          loading={savingField}
+          onCancel={() => setBlockedStatus(null)}
+          onConfirm={(reason) => {
+            setBlockedStatus(null);
+            void changeStatus(blockedStatus, reason);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

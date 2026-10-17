@@ -1,4 +1,4 @@
-import type { Task, Workspace, WorkspaceRole } from "./types";
+import type { Project, Task, Workspace, WorkspaceRole } from "./types";
 
 const STORAGE_KEY = "davt_workspace";
 
@@ -68,6 +68,21 @@ export function canManageTaskAttachments(
   userId: number | null | undefined,
 ): boolean {
   return canChangeTaskStatus(role, task, userId);
+}
+
+export function canEditProject(role: WorkspaceRole | null | undefined): boolean {
+  return contributesToWorkspace(role);
+}
+
+export function canDeleteProject(
+  role: WorkspaceRole | null | undefined,
+  project: Pick<Project, "created_by">,
+  userId: number | null | undefined,
+): boolean {
+  return (
+    managesWorkspace(role) ||
+    (typeof userId === "number" && project.created_by === userId)
+  );
 }
 
 export function isPersonalWorkspace(

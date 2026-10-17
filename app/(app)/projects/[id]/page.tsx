@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/projects/project-form";
+import { BlockedReasonDialog } from "@/components/tasks/blocked-reason-dialog";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskListItem } from "@/components/tasks/task-list-item";
 import { ProjectStatusBadge } from "@/components/tasks/task-badges";
@@ -22,7 +23,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const projectId = params.id;
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, canContribute } = useWorkspace();
   const { user } = useAuth();
   const canEdit = canEditTaskDetails(activeWorkspace?.role);
 
@@ -36,6 +37,10 @@ export default function ProjectDetailPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [defaultStatus, setDefaultStatus] = useState<string>("Backlog");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [blockedRequest, setBlockedRequest] = useState<{
+    task: Task;
+    status: TaskStatus;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -72,14 +77,18 @@ export default function ProjectDetailPage() {
     });
   }
 
-  async function handleStatusChange(task: Task, status: TaskStatus) {
+  async function commitStatusChange(
+    task: Task,
+    status: TaskStatus,
+    blockedReason?: string,
+  ) {
     const previous = tasks;
     setTasks((prev) =>
       prev.map((item) => (item.id === task.id ? { ...item, status } : item)),
     );
     setActionError(null);
     try {
-      const response = await api.updateTaskStatus(task.id, status);
+      const response = await api.updateTaskStatus(task.id, status, blockedReason);
       upsertTask(response.data);
     } catch (err) {
       setTasks(previous);
@@ -89,6 +98,14 @@ export default function ProjectDetailPage() {
           : "Gagal mengubah status task.",
       );
     }
+  }
+
+  function handleStatusChange(task: Task, status: TaskStatus) {
+    if (status === "Blocked") {
+      setBlockedRequest({ task, status });
+      return;
+    }
+    void commitStatusChange(task, status);
   }
 
   function openNewTask(status: string) {
@@ -124,14 +141,20 @@ export default function ProjectDetailPage() {
               {tasks.length} task
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setProjectFormOpen(true)}>
-              Edit Project
-            </Button>
-            <Button size="sm" onClick={() => openNewTask("Backlog")}>
-              Task Baru
-            </Button>
-          </div>
+          {canContribute ? (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProjectFormOpen(true)}
+              >
+                Edit Project
+              </Button>
+              <Button size="sm" onClick={() => openNewTask("Backlog")}>
+                Task Baru
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -167,8 +190,16 @@ export default function ProjectDetailPage() {
       {tasks.length === 0 ? (
         <EmptyState
           title="Belum ada task"
-          description="Tambahkan task pertama pada project ini."
-          action={<Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>}
+          description={
+            canContribute
+              ? "Tambahkan task pertama pada project ini."
+              : "Belum ada task pada project ini."
+          }
+          action={
+            canContribute ? (
+              <Button onClick={() => openNewTask("Backlog")}>Task Baru</Button>
+            ) : undefined
+          }
         />
       ) : view === "board" ? (
         <KanbanBoard
@@ -182,7 +213,7 @@ export default function ProjectDetailPage() {
             router.push(`/tasks/${task.id}`);
           }}
           onStatusChange={handleStatusChange}
-          onAdd={openNewTask}
+          onAdd={canContribute ? openNewTask : undefined}
           canDrag={(task) =>
             canChangeTaskStatus(activeWorkspace?.role, task, user?.id)
           }
@@ -195,7 +226,7 @@ export default function ProjectDetailPage() {
         </Card>
       )}
 
-      {projectFormOpen ? (
+      {projectFormOpen && canContribute ? (
         <ProjectForm
           project={project}
           onClose={() => setProjectFormOpen(false)}
@@ -203,7 +234,7 @@ export default function ProjectDetailPage() {
         />
       ) : null}
 
-      {taskFormOpen ? (
+      {taskFormOpen && canContribute ? (
         <TaskForm
           projects={[project]}
           task={editingTask}
@@ -217,6 +248,18 @@ export default function ProjectDetailPage() {
                 ? { ...prev, tasks_count: (prev.tasks_count ?? 0) + 1 }
                 : prev,
             );
+          }}
+        />
+      ) : null}
+
+      {blockedRequest ? (
+        <BlockedReasonDialog
+          taskTitle={blockedRequest.task.title}
+          onCancel={() => setBlockedRequest(null)}
+          onConfirm={(reason) => {
+            const request = blockedRequest;
+            setBlockedRequest(null);
+            void commitStatusChange(request.task, request.status, reason);
           }}
         />
       ) : null}

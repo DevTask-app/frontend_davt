@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canChangeTaskStatus,
+  canDeleteProject,
+  canEditProject,
   canEditTaskDetails,
   canManageTaskAttachments,
   contributesToWorkspace,
@@ -72,6 +74,26 @@ describe("task permissions", () => {
     expect(canManageTaskAttachments("Member", assigned, 5)).toBe(true);
     expect(canManageTaskAttachments("Member", assigned, 6)).toBe(false);
     expect(canManageTaskAttachments("Viewer", assigned, 5)).toBe(false);
+  });
+});
+
+describe("project permissions", () => {
+  const project = { created_by: 5 };
+
+  it("lets any contributor edit a project", () => {
+    expect(canEditProject("Owner")).toBe(true);
+    expect(canEditProject("Admin")).toBe(true);
+    expect(canEditProject("Member")).toBe(true);
+    expect(canEditProject("Viewer")).toBe(false);
+  });
+
+  it("lets managers or the creator delete a project", () => {
+    expect(canDeleteProject("Owner", project, 6)).toBe(true);
+    expect(canDeleteProject("Admin", project, 6)).toBe(true);
+    expect(canDeleteProject("Member", project, 5)).toBe(true);
+    expect(canDeleteProject("Member", project, 6)).toBe(false);
+    expect(canDeleteProject("Viewer", project, 5)).toBe(true);
+    expect(canDeleteProject("Viewer", project, 6)).toBe(false);
   });
 });
 

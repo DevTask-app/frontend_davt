@@ -432,10 +432,14 @@ export const api = {
     });
   },
 
-  updateTaskStatus(id: number | string, status: TaskStatus) {
+  updateTaskStatus(
+    id: number | string,
+    status: TaskStatus,
+    blockedReason?: string | null,
+  ) {
     return request<{ data: Task }>(`/tasks/${id}/status`, {
       method: "PATCH",
-      body: { status },
+      body: { status, blocked_reason: blockedReason ?? null },
     });
   },
 

@@ -6,10 +6,14 @@ import { formatDate } from "@/lib/utils";
 
 export function ProjectCard({
   project,
+  canEdit = true,
+  canDelete = true,
   onEdit,
   onDelete,
 }: {
   project: Project;
+  canEdit?: boolean;
+  canDelete?: boolean;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
 }) {
@@ -48,12 +52,16 @@ export function ProjectCard({
             Buka
           </Button>
         </Link>
-        <Button variant="outline" size="sm" onClick={() => onEdit(project)}>
-          Edit
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => onDelete(project)}>
-          Hapus
-        </Button>
+        {canEdit ? (
+          <Button variant="outline" size="sm" onClick={() => onEdit(project)}>
+            Edit
+          </Button>
+        ) : null}
+        {canDelete ? (
+          <Button variant="ghost" size="sm" onClick={() => onDelete(project)}>
+            Hapus
+          </Button>
+        ) : null}
       </div>
     </div>
   );
