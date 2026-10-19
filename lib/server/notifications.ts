@@ -54,6 +54,7 @@ export async function notifyTaskAssignee(
   await prisma.notification.create({
     data: {
       type: TASK_ASSIGNED_TYPE,
+      notifiableType: "App\\Models\\User",
       notifiableId: assignee.id,
       data: data as unknown as Prisma.InputJsonObject,
     },
@@ -62,6 +63,7 @@ export async function notifyTaskAssignee(
   await sendTaskAssignedMail({
     to: assignee.email,
     taskTitle: task.title,
+    projectName: data.project_name,
     assignedBy: actor.name,
     url: data.url,
   });

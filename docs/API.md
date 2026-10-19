@@ -369,7 +369,7 @@ Task dapat memiliki foto lampiran: **JPG, PNG, WEBP, atau GIF**, **maksimal
 `sort` divalidasi dengan allowlist. Contoh:
 
 ```http
-GET /api/v1/tasks?status=in_progress&priority=high&project_id=1&due_before=2026-10-14&sort=due_date&direction=asc&page=1&per_page=20
+GET /api/backend/tasks?status=in_progress&priority=high&project_id=1&due_before=2026-10-14&sort=due_date&direction=asc&page=1&per_page=20
 ```
 
 > Pencarian teks **belum** didukung server-side (`search` bukan parameter yang

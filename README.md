@@ -95,7 +95,7 @@ Detail lengkap ada di [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Dokumentasi
 
-- [`docs/API.md`](docs/API.md) — kontrak REST API `/api/v1` (endpoint, filter, response, error).
+- [`docs/API.md`](docs/API.md) — kontrak REST API `/api/backend` (endpoint, filter, response, error).
 - [`docs/ERD.md`](docs/ERD.md) — ERD & aturan relasi backend.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — konfigurasi, Docker, deploy, checklist rilis.
 - [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md) — daftar tangkapan layar.
@@ -107,7 +107,10 @@ Detail lengkap ada di [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
   [`docs/API.md`](docs/API.md)). Logika server ada di `lib/server/*`
   (validasi, JWT, kebijakan aksi workspace, serializer).
 - **ORM** (Prisma + PostgreSQL): skema di `prisma/schema.prisma`; migration
-  dijalankan lewat `npx prisma migrate dev`.
+  dijalankan lewat `npx prisma migrate dev`. Struktur tabel mengikuti backend
+  Laravel `backend_devt` (nama tabel/kolom, panjang varchar, index, dan
+  `ON DELETE`); deviasi yang disengaja didaftar di
+  [`docs/ERD.md`](docs/ERD.md#deviasi-yang-disengaja-dari-laravel).
 - **Route protection** (`proxy.ts`, pengganti `middleware` di Next 16):
   membaca cookie `davt_token`; redirect ke `/login` bila belum masuk dan ke
   `/dashboard` bila sudah masuk tetapi membuka `/login` `/register`. Rute baru
@@ -184,7 +187,8 @@ docker-compose.yml
   default 15), `GET /notifications/unread-count`, `PATCH /notifications/{id}/read`,
   `POST /notifications/read-all`, `DELETE /notifications/{id}`. Notifikasi dibuat
   saat task diberikan ke assignee lain (bukan self-assign) pada create/ubah
-  assignee, disertai email (mailer `log` saat pengembangan).
+   assignee, disertai email (template HTML + text identik dengan Laravel;
+   mailer `smtp` mengirim sungguhan, `log` mencetak ke console).
 
 ## Keamanan dependensi
 

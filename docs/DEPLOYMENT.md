@@ -11,8 +11,13 @@ PostgreSQL). UI dan API dikirim oleh proses Next.js yang sama.
 | `JWT_SECRET` | ya | — | Secret HS256 untuk access token. |
 | `FRONTEND_URL` | tidak | `http://localhost:3000` | Basis URL untuk link undangan. |
 | `MAIL_MAILER` | tidak | `log` | `log` (tulis ke log) atau `smtp`. |
+| `MAIL_SCHEME` | tidak | — | `smtps` bila SMTP ber-SSL eksplisit; kosongkan untuk STARTTLS (port 587). |
+| `MAIL_HOST` | tidak | `127.0.0.1` | Host SMTP (`MAIL_MAILER=smtp`). |
+| `MAIL_PORT` | tidak | `587` | Port SMTP. |
+| `MAIL_USERNAME` | tidak | — | User SMTP; kosongkan bila server tak butuh auth. |
+| `MAIL_PASSWORD` | tidak | — | Password SMTP. |
 | `MAIL_FROM_ADDRESS` | tidak | `hello@example.com` | Alamat pengirim email. |
-| `MAIL_FROM_NAME` | tidak | `DevT` | Nama pengirim email. |
+| `MAIL_FROM_NAME` | tidak | `DevT` | Nama pengirim & nama aplikasi di isi email. |
 | `NEXT_PUBLIC_APP_NAME` | tidak | `DevT` | Nama aplikasi pada UI. |
 
 Semua variabel bersifat **runtime** (tidak di-bake saat build), kecuali
@@ -60,8 +65,9 @@ docker compose up --build
 - **Lampiran task** disimpan di disk `storage/app/private` di dalam container.
   Untuk produksi, pasang volume agar file tidak hilang saat container dibuat
   ulang, mis. `-v davt_storage:/app/storage/app/private`.
-- Simpan `MAIL_MAILER=log` pada demo; gunakan SMTP bila email notifikasi perlu
-  benar-benar terkirim (Phase 2 mengirim lewat log mailer).
+- Simpan `MAIL_MAILER=log` pada demo; gunakan `MAIL_MAILER=smtp` (+ `MAIL_HOST`
+  dkk.) bila email notifikasi harus benar-benar terkirim. Pengirim memakai kredensial
+  dari `backend_devt/.env` (Gmail) bila dijalankan lokal dengan konfigurasi sama.
 
 ### Struktur image
 

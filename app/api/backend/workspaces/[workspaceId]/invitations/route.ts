@@ -81,8 +81,9 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
     await sendWorkspaceInvitationMail({
       to: invitation.email,
       workspaceName: workspace.name,
-      inviterName: user.name,
       acceptUrl: invitationResource(invitation).accept_url,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
     });
 
     return json(

@@ -3,7 +3,8 @@
 Entity Relationship Diagram untuk backend (kini Route Handlers Next.js +
 Prisma; skema di `prisma/schema.prisma`, semula Laravel `backend_devt`).
 Frontend tidak memiliki basis data sendiri; seluruh data diambil dari REST API
-`/api/v1`.
+`/api/backend`. Skema mengikuti struktur Laravel `backend_devt` (lihat bagian
+[Deviasi yang disengaja](#deviasi-yang-disengaja-dari-laravel)).
 
 ```mermaid
 erDiagram
@@ -24,16 +25,13 @@ erDiagram
     users ||--o{ task_attachments : "mengunggah"
 
     users {
-        bigint id PK
+        int id PK
         string name
         string email UK
         timestamp email_verified_at
         string password
-        string role "Admin|User, default User"
-        string two_factor_secret
-        text two_factor_recovery_codes
-        timestamp two_factor_confirmed_at
-        string remember_token
+        string role "Admin|User, default User, max 20"
+        string remember_token "max 100"
         timestamp created_at
         timestamp updated_at
     }
@@ -120,11 +118,22 @@ erDiagram
         bigint id PK
         bigint task_id FK
         bigint user_id FK "pengunggah"
-        string disk "default local"
+        string disk "default local, max 50"
         string path "path relatif pada disk"
         string original_name "nama file asli"
-        string mime_type "image/jpeg|..."
-        bigint size "ukuran (byte)"
+        string mime_type "image/jpeg|..., max 100"
+        int size "ukuran (byte)"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    notifications {
+        uuid id PK
+        string type "App\\Notifications\\TaskAssigned"
+        string notifiable_type "App|Models User (morph)"
+        int notifiable_id "morph, tanpa FK"
+        json data "payload JSON"
+        timestamp read_at "nullable"
         timestamp created_at
         timestamp updated_at
     }
@@ -150,8 +159,9 @@ erDiagram
   backfill: project lama pindah ke personal workspace pemiliknya). `user_id`
   tetap dipertahankan sebagai pemilik historis.
 - Penghapusan **workspace** diblokir (`409`) bila masih punya project; workspace
-  personal tidak dapat dihapus. `workspace_members` / `workspace_invitations`
-  terhapus berantai saat workspace dihapus.
+  personal tidak dapat dihapus. `projects`, `workspace_members`, dan
+  `workspace_invitations` terhapus berantai (`ON DELETE CASCADE`) saat workspace
+  dihapus.
 - `tasks.assignee_id` (nullable, FK `users`) menunjuk penanggung jawab; harus
   merupakan anggota workspace project tersebut. `ON DELETE SET NULL`.
 - `projects.user_id`, `tasks.project_id`, `tasks.created_by`, dan
@@ -166,7 +176,31 @@ erDiagram
   `ON DELETE RESTRICT`. File fisik disimpan di disk `local`
   (`storage/app/private`) dan diakses lewat **signed URL** (`/storage/{path}`),
   bukan akses publik.
+- `notifications` adalah tabel notifikasi polymorphic bergaya Laravel: `id`
+  `uuid` (dibuat Prisma), `notifiable_type` diisi eksplisit
+  (`App\Models\User`), dan **tidak** punya FK (agar tetap polymorphic, sama
+  seperti Laravel). `data` disimpan sebagai `jsonb`. Karena tanpa FK,
+  notifikasi user tidak ikut terhapus saat user dihapus (perilaku sama dengan
+  Laravel).
 - Enum disimpan sebagai `string` + index (bukan tipe enum PostgreSQL).
+
+## Deviasi yang disengaja dari Laravel
+
+Skema Prisma mengikuti `backend_devt` (nama tabel, kolom, panjang varchar,
+default, index/unique/constraint, `ON DELETE`, `timestamptz`) **kecuali** titik
+berikut yang dipilih secara sadar karena lebih baik untuk stack Next.js/Prisma.
+Kontrak JSON API tidak terpengaruh (`resources.ts` memformat ulang semua nilai).
+
+| Item | Laravel | Prisma (DevT) | Alasan |
+| --- | --- | --- | --- |
+| Tipe `id` (semua PK/FK), `task_attachments.size`, `notifications.notifiable_id` | `bigint` | `int` (serial) | Prisma `BigInt` tidak dapat di-`JSON.stringify` & merusak perbandingan `===`; batas 2,1 M baris jauh di luar kebutuhan |
+| `created_at`/`updated_at` | nullable, tanpa default | `NOT NULL` + default `now()`/`@updatedAt` | Jaminan integritas; Prisma mengisi otomatis sehingga urutan tidak pernah `NULL` |
+| Presisi timestamp | `(0)` detik | `(3)` milidetik | Urutan `created_at desc` deterministik; `isoDateTime()` membuang milidetik sehingga bentuk JSON tetap sama |
+| `notifications.data`, `task_activity_logs.changes` | `text` / `json` | `jsonb` | Validasi struktur di DB, bisa di-query, tanpa encode manual; respons JSON identik |
+| `projects.user_id` | nullable (warisan migrasi) | `NOT NULL` | Controller selalu mengisi `user_id`; cocok dengan `Project.user_id: number` di frontend |
+| Index `tasks(type)`, `tasks(assignee_id)`, `tasks(deleted_at)`, `projects(workspace_id)` | tidak ada | ada | Optimasi filter yang dipakai backend (list task, soft delete, akses project per workspace) |
+| Tabel framework Laravel: `sessions`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs`, `password_reset_tokens`, `migrations` | ada | tidak dibuat | Backend Next.js stateless (JWT), mailer `log`, tanpa queue/cache DB |
+| `_prisma_migrations` | (`migrations`) | ada | Tabel internal Prisma Migrate |
 
 ## Pemetaan ke frontend
 
@@ -180,3 +214,4 @@ erDiagram
 | `tasks` | `Task` (+ `assignee_id`, `assignee`) | `/tasks`, `/tasks/[id]` |
 | `task_activity_logs` | `TaskActivityLog` | tab riwayat di `/tasks/[id]` |
 | `task_attachments` | `TaskAttachment` | galeri lampiran di `/tasks/[id]` |
+| `notifications` | `AppNotification` | lonceng notifikasi di topbar |
