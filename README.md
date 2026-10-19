@@ -1,8 +1,8 @@
-# DevT — Frontend
+# DevT — Frontend + Backend
 
-Frontend untuk aplikasi manajemen project & task (P0 MVP). Dibangun dengan
-**Next.js 16** (App Router, Turbopack) + TypeScript + Tailwind CSS v4, dan
-mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
+Aplikasi manajemen project & task (P0 MVP) all-in-one: **Next.js 16** (App
+Router, Turbopack) + TypeScript + Tailwind CSS v4 untuk UI **dan** API REST
+(Route Handlers di `app/api/backend/**` + Prisma + PostgreSQL). Autentikasi JWT.
 
 ## Fitur
 
@@ -27,27 +27,29 @@ mengonsumsi REST API Laravel (`backend_devt`) dengan autentikasi JWT.
 ## Prasyarat
 
 - Node.js 20+ dan npm.
-- Backend Laravel (`backend_devt`) berjalan, mis. di `http://localhost:8000`,
-  dengan PostgreSQL aktif dan endpoint `/api/v1/*` siap.
+- PostgreSQL yang bisa diakses (mis. container `backend_devt-db` di
+  `127.0.0.1:5433`, atau instalasi lokal di port 5432).
 
 ## Konfigurasi
 
-Salin `.env.example` menjadi `.env.local` lalu sesuaikan:
+Salin `.env.example` menjadi `.env` lalu sesuaikan:
 
 ```
-BACKEND_API_URL=http://localhost:8000
+DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/davt_next
+JWT_SECRET=change-me-to-a-long-random-string-32+
+FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_APP_NAME=DevT
 ```
 
-Semua permintaan dari browser memakai path relatif same-origin `/api/backend/*`
-yang di-proxy oleh Next.js (`next.config.ts` → `rewrites`) ke
-`${BACKEND_API_URL}/api/v1/*`. Ini menghindari CORS dan menyembunyikan URL
-backend dari kode klien.
+API dijalankan sebagai Route Handlers Next.js di `app/api/backend/**`; frontend
+memanggil path relatif same-origin `/api/backend/*` (tanpa proxy, tanpa CORS).
 
 ## Menjalankan
 
 ```bash
 npm install
+npx prisma migrate dev     # buat tabel (sekali saja)
+npm run db:seed            # data contoh (opsional)
 npm run dev
 ```
 
@@ -67,7 +69,9 @@ npm run build      # build produksi (output standalone)
 npm run start      # jalankan hasil build
 npm run lint       # ESLint
 npm run typecheck  # tsc --noEmit
-npm test           # Vitest (unit test schema & util)
+npm test           # Vitest (unit test)
+npm run db:reset   # reset database + migrate + seed
+npm run db:studio  # Prisma Studio
 ```
 
 ## Docker
@@ -81,13 +85,13 @@ docker compose up --build            # http://localhost:3000
 atau manual:
 
 ```bash
-docker build --build-arg BACKEND_API_URL=http://host.docker.internal:8000 -t frontend_davt .
-docker run --rm -p 3000:3000 frontend_davt
+docker build -t frontend_davt .
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL=postgresql://... -e JWT_SECRET=... frontend_davt
 ```
 
-`BACKEND_API_URL` di-bake saat build (rewrite di-resolve ketika `next build`),
-jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+`DATABASE_URL` dan `JWT_SECRET` wajib diset saat runtime (bukan build).
+Detail lengkap ada di [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Dokumentasi
 
@@ -98,9 +102,12 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
 
 ## Arsitektur singkat
 
-- **Proxy rewrite** (`next.config.ts`): `/api/backend/:path*` →
-  `${BACKEND_API_URL}/api/v1/:path*`; `/storage/:path*` →
-  `${BACKEND_API_URL}/storage/:path*` (signed URL lampiran task).
+- **API Route Handlers** (`app/api/backend/**`): implementasi REST API menggantikan
+  backend Laravel `backend_devt`, dengan kontrak response identik (lihat
+  [`docs/API.md`](docs/API.md)). Logika server ada di `lib/server/*`
+  (validasi, JWT, kebijakan aksi workspace, serializer).
+- **ORM** (Prisma + PostgreSQL): skema di `prisma/schema.prisma`; migration
+  dijalankan lewat `npx prisma migrate dev`.
 - **Route protection** (`proxy.ts`, pengganti `middleware` di Next 16):
   membaca cookie `davt_token`; redirect ke `/login` bila belum masuk dan ke
   `/dashboard` bila sudah masuk tetapi membuka `/login` `/register`. Rute baru
@@ -110,7 +117,7 @@ jadi berikan sebagai `--build-arg`/env build. Detail lengkap ada di
   `localStorage`. API client otomatis menyegarkan token lewat
   `POST /auth/refresh` saat menerima 401.
 - **API client** (`lib/api.ts`): `request<T>()` terpusat, error divalidasi
-  menjadi `ApiError` (pesan + `errors` per field dari respons 422 Laravel).
+  menjadi `ApiError` (pesan + `errors` per field dari respons 422).
   Client menyisipkan header `X-Workspace-Id` dari workspace aktif.
 - **Workspace context** (`components/providers/workspace-provider.tsx`,
   `lib/workspace.ts`): memuat daftar workspace dari `/me`, menyimpan workspace
@@ -132,7 +139,10 @@ app/
   (auth)/         # login, register (layout tanpa shell)
   (app)/          # area terproteksi: dashboard, projects, tasks, notifications,
                   #   profile, workspaces/[id], invitations/[token]
+  api/backend/    # Route Handlers REST (auth, workspaces, projects, tasks, ...)
 lib/              # api, auth, validation, types, enums, workspace, notifications, utils
+lib/server/       # logika API: db (Prisma), jwt, validation, auth/policy, resources
+prisma/           # schema.prisma, migration, seed.ts
 components/
   layout/         # app shell (sidebar + topbar), workspace switcher, notification bell
   providers/      # AuthProvider, WorkspaceProvider, NotificationProvider
@@ -142,7 +152,7 @@ components/
   workspaces/     # workspace form, invite form
   dashboard/      # stat card
 tests/            # unit test Vitest
-docs/             # ERD, deployment, screenshots
+docs/             # API, ERD, deployment, screenshots
 proxy.ts          # proteksi rute
 Dockerfile        # image standalone
 docker-compose.yml
@@ -150,30 +160,31 @@ docker-compose.yml
 
 ## Catatan backend
 
-- Endpoint: `/api/v1` (lihat `backend_devt/routes/api.php`).
+- Endpoint: `/api/backend/*` (Route Handlers Next.js; kontrak sama dengan
+  `docs/API.md` yang semula dilayani Laravel `/api/v1/*`).
 - Project & task berada di dalam **workspace**; permintaan menyertakan header
-  `X-Workspace-Id` (bila kosong, backend memakai personal workspace user).
-  Non-anggota → `403`, workspace tidak dikenal → `404`.
-- Nilai enum harus persis, mis. status task `Backlog | To Do | In Progress |
-  In Review | Blocked | Done`; peran workspace `Owner | Admin | Member | Viewer`.
+  `X-Workspace-Id` (bila kosong, backend memakai personal workspace user yang
+  dibuat otomatis). Non-anggota → `403`, workspace tidak dikenal → `404`.
+- Nilai enum menerima alias (`in_progress`, `InProgress`, `In Progress`); peran
+  workspace harus persis `Owner | Admin | Member | Viewer`.
 - Pencarian teks dilakukan di sisi klien terhadap halaman yang sedang tampil,
   karena endpoint list belum mendukung parameter `search`. Gunakan filter
   server-side (status/prioritas/tipe/project/assignee/tanggal) untuk
   mempersempit data lintas halaman.
-- Pagination memakai `meta.current_page` / `meta.last_page` (link dari backend
-  menunjuk ke `localhost:8000`, jadi tidak dipakai).
+- Pagination memakai `meta.current_page` / `meta.last_page`; `links.first/last/
+  prev/next` memakai host request sendiri (bukan host backend terpisah).
 - Filter deadline memakai parameter `due_before`/`due_after`; hasilnya dirapikan
   di klien agar task berstatus `Done` tidak ikut terhitung terlambat.
-- Lampiran task (`POST /tasks/{id}/attachments`, `DELETE /attachments/{id}`)
-  memakai `multipart/form-data`; `GET /tasks/{id}` mengembalikan `attachments[]`
-  berisi **signed URL** yang di-proxy lewat rewrite `/storage/*`.
-- Notifikasi (`GET /notifications`, `GET /notifications/unread-count`,
-  `PATCH /notifications/{id}/read`, `POST /notifications/read-all`,
-  `DELETE /notifications/{id}`) bersifat per-user (tanpa header workspace); `id`
-  berupa UUID. Lonceng topbar melakukan polling `unread-count` tiap 30 detik dan
-  menyegarkan saat jendela kembali fokus. Payload notifikasi menyertakan
-  `workspace_id`; saat dibuka frontend mengaktifkan workspace tersebut lebih dulu
-  agar route `/tasks/{id}` (yang dibatasi workspace aktif) tetap resolve.
+- **Lampiran task:** `POST /tasks/{id}/attachments` (multipart `file`, gambar
+  JPG/PNG/WEBP/GIF maks 2 MB) dan `DELETE /attachments/{id}`. File disimpan di
+  `storage/app/private/task-attachments/{taskId}/` dan diakses lewat URL bertanda
+  tangan (`/storage/{path}?expires=&signature=`, berlaku 24 jam). Policy sama
+  dengan ubah status (pengelola workspace atau assignee).
+- **Notifikasi:** `GET /notifications` (paginated; `per_page` di-clamp 1–100,
+  default 15), `GET /notifications/unread-count`, `PATCH /notifications/{id}/read`,
+  `POST /notifications/read-all`, `DELETE /notifications/{id}`. Notifikasi dibuat
+  saat task diberikan ke assignee lain (bukan self-assign) pada create/ubah
+  assignee, disertai email (mailer `log` saat pengembangan).
 
 ## Keamanan dependensi
 

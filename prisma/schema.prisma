@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     Int      @id @default(autoincrement())
+  name                   String   @db.VarChar(255)
+  email                  String   @unique @db.VarChar(255)
+  emailVerifiedAt        DateTime? @map("email_verified_at")
+  password               String   @db.VarChar(255)
+  role                   String   @default("User") @db.VarChar(255)
+  twoFactorSecret        String?   @map("two_factor_secret") @db.VarChar(255)
+  twoFactorRecoveryCodes String?   @map("two_factor_recovery_codes") @db.Text
+  twoFactorConfirmedAt   DateTime? @map("two_factor_confirmed_at")
+  rememberToken          String?   @map("remember_token") @db.VarChar(255)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  memberships     WorkspaceMember[]
+  invitedMembers  WorkspaceMember[]     @relation("MemberInvitedBy")
+  invitations     WorkspaceInvitation[] @relation("InvitationInvitedBy")
+  ownedProjects   Project[]             @relation("ProjectOwner")
+  createdProjects Project[]             @relation("ProjectCreatedBy")
+  createdTasks    Task[]                @relation("TaskCreatedBy")
+  updatedTasks    Task[]                @relation("TaskUpdatedBy")
+  assignedTasks   Task[]                @relation("TaskAssignee")
+  activityLogs    TaskActivityLog[]
+  attachments     TaskAttachment[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(150)
+  slug        String   @unique @db.VarChar(180)
+  isPersonal  Boolean  @default(false) @map("is_personal")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
+  projects    Project[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int       @map("workspace_id")
+  userId      Int       @map("user_id")
+  role        String    @default("Member") @db.VarChar(255)
+  invitedBy   Int?      @map("invited_by")
+  joinedAt    DateTime? @map("joined_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviter   User?     @relation("MemberInvitedBy", fields: [invitedBy], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int       @map("workspace_id")
+  email       String    @db.VarChar(255)
+  role        String    @default("Member") @db.VarChar(255)
+  token       String    @unique @db.VarChar(64)
+  invitedBy   Int?      @map("invited_by")
+  expiresAt   DateTime? @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter   User?     @relation("InvitationInvitedBy", fields: [invitedBy], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, email])
+  @@map("workspace_invitations")
+}
+
+model Project {
+  id          Int       @id @default(autoincrement())
+  workspaceId Int       @map("workspace_id")
+  userId      Int       @map("user_id")
+  createdBy   Int       @map("created_by")
+  name        String    @db.VarChar(150)
+  description String?   @db.Text
+  status      String    @default("Active") @db.VarChar(255)
+  startDate   DateTime? @map("start_date") @db.Date
+  dueDate     DateTime? @map("due_date") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  owner     User      @relation("ProjectOwner", fields: [userId], references: [id], onDelete: Restrict)
+  creator   User      @relation("ProjectCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  tasks     Task[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Task {
+  id              Int       @id @default(autoincrement())
+  projectId       Int       @map("project_id")
+  createdBy       Int       @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+  parentTaskId    Int?      @map("parent_task_id")
+  assigneeId      Int?      @map("assignee_id")
+  title           String    @db.VarChar(200)
+  description     String?   @db.Text
+  type            String    @default("Feature") @db.VarChar(255)
+  status          String    @default("Backlog") @db.VarChar(255)
+  priority        String    @default("Medium") @db.VarChar(255)
+  dueDate         DateTime? @map("due_date") @db.Date
+  estimatedHours  Decimal?  @map("estimated_hours") @db.Decimal(8, 2)
+  actualHours     Decimal?  @map("actual_hours") @db.Decimal(8, 2)
+  completedAt     DateTime? @map("completed_at")
+  blockedReason   String?   @map("blocked_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  creator   User          @relation("TaskCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater   User?         @relation("TaskUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  assignee  User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  parent    Task?         @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks  Task[]        @relation("TaskHierarchy")
+  logs      TaskActivityLog[]
+  attachments TaskAttachment[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([assigneeId])
+  @@index([deletedAt])
+  @@map("tasks")
+}
+
+model TaskActivityLog {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  userId    Int      @map("user_id")
+  action    String   @db.VarChar(255)
+  changes   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([taskId])
+  @@map("task_activity_logs")
+}
+
+model TaskAttachment {
+  id           Int      @id @default(autoincrement())
+  taskId       Int      @map("task_id")
+  userId       Int      @map("user_id")
+  disk         String   @default("local") @db.VarChar(255)
+  path         String   @db.VarChar(255)
+  originalName String   @map("original_name") @db.VarChar(255)
+  mimeType     String   @map("mime_type") @db.VarChar(255)
+  size         Int
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([taskId])
+  @@map("task_attachments")
+}
+
+model Notification {
+  id             String    @id @default(uuid())
+  type           String    @db.VarChar(255)
+  notifiableType String    @default("App\\Models\\User") @map("notifiable_type") @db.VarChar(255)
+  notifiableId   Int       @map("notifiable_id")
+  data           Json
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  notifiable User @relation(fields: [notifiableId], references: [id], onDelete: Cascade)
+
+  @@index([notifiableType, notifiableId])
+  @@map("notifications")
+}

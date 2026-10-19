@@ -1,16 +1,22 @@
-# API Reference — DevTask (backend_devt)
+# API Reference — DevTask
 
-Kontrak REST API Laravel yang dikonsumsi frontend. Semua endpoint memakai prefix
-`/api/v1`.
+Kontrak REST API yang dikonsumsi frontend. Dokumen ini semula merefleksikan
+backend Laravel `backend_devt` (`/api/v1`); kini kontrak yang sama diimplementasikan
+oleh Route Handlers Next.js di `app/api/backend/**` (prefix `/api/backend`).
 
-- **Base URL (lokal):** `http://localhost:8000/api/v1`
+- **Base URL (lokal):** `http://localhost:3000/api/backend`
 - **Autentikasi:** JWT bearer (`Authorization: Bearer <access_token>`)
 - **Workspace aktif:** header `X-Workspace-Id` (lihat §4)
 - **Format:** JSON (`Content-Type: application/json`, `Accept: application/json`)
 
-> Frontend **tidak** memanggil backend secara langsung. Browser memakai path
-> same-origin `/api/backend/*` yang di-proxy oleh Next.js ke
-> `${BACKEND_API_URL}/api/v1/*` (lihat `next.config.ts`).
+> Frontend memanggil path same-origin `/api/backend/*` yang dilayani langsung
+> oleh Route Handlers Next.js (tanpa proxy, tanpa CORS). Catatan pada dokumen
+> ini yang menyebut `/api/v1` atau backend Laravel merujuk ke kontrak historis;
+> path yang dipanggil frontend selalu berprefix `/api/backend`.
+
+> Seluruh endpoint pada dokumen ini (§1–§15, termasuk lampiran dan notifikasi)
+> sudah diimplementasikan di `app/api/backend/**`; hanya `/storage/{path}` yang
+> berada di luar prefix tersebut (route tanda tangan file, lihat §14).
 
 ## 1. Konvensi response
 
@@ -331,15 +337,17 @@ Task dapat memiliki foto lampiran: **JPG, PNG, WEBP, atau GIF**, **maksimal
   Validasi gagal → `422` dengan `errors.file` (mis. "Ukuran foto maksimal 2 MB.").
 - **Hapus**: `DELETE /attachments/{id}` menghapus record **dan** file di storage.
 - File disimpan pada disk `local` (`storage/app/private`) — **tidak** publik.
-  `url` adalah **signed URL** Laravel berumur pendek (route `storage.local`)
-  yang divalidasi tanpa perlu header Authorization.
-- Frontend men-*rewrite* `/storage/:path*` ke backend (`next.config.ts`),
-  sehingga cukup memakai path relatif (`url` tanpa origin, lihat
-  `storagePath()` di `lib/utils.ts`).
+  `url` adalah **signed URL** berumur pendek (kedaluwarsa 24 jam) yang
+  divalidasi tanpa perlu header Authorization.
+- URL `url` dibuat oleh backend dengan origin `FRONTEND_URL`; frontend cukup
+  memakai path relatifnya (`url` tanpa origin, lihat `storagePath()` di
+  `lib/utils.ts`). Serve file ditangani Route Handler `app/storage/[...path]`
+  (rewrite `next.config.ts` sudah dihapus); signature dihitung dari
+  `path?expires=` dengan HMAC-SHA256 (`JWT_SECRET`).
 - Unggah/hapus lampiran menulis `task_activity_logs`
   (`attachment_added` / `attachment_removed`).
-- Batas unggah PHP di-*raise* lewat `docker/php.ini`
-  (`upload_max_filesize=8M`, `post_max_size=12M`) agar file 2 MB lolos.
+- Tipe file dideteksi dari magic bytes (bukan `Content-Type` klien); ekstensi
+  penyimpanan mengikuti hasil deteksi.
 
 ### Filter, sort, dan paginasi (`GET /tasks`)
 
@@ -372,8 +380,8 @@ GET /api/v1/tasks?status=in_progress&priority=high&project_id=1&due_before=2026-
 
 Notifikasi **in-app (database)** + **email** dikirim ke penerima saat task
 dibuat/diubah dengan `assignee_id` (self-assignment dan task tanpa assignee tidak
-memicu notifikasi). Endpoint di bawah ini bersifat per-user dan **tidak**
-memerlukan header `X-Workspace-Id`.
+memicu notifikasi). Endpoint di bawah ini berada di grup `auth:api` +
+`active.workspace` (header `X-Workspace-Id` tetap divalidasi bila dikirim).
 
 | Method | Endpoint | Fungsi |
 | --- | --- | --- |

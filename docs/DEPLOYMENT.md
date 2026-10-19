@@ -1,48 +1,49 @@
-# Deployment — DevT Frontend
+# Deployment — DevT
 
-Panduan men-deploy frontend Next.js 16. Aplikasi membutuhkan backend Laravel
-(`backend_devt`) yang sudah berjalan dan dapat dijangkau.
+Panduan men-deploy aplikasi DevT (Next.js 16 + Route Handlers API + Prisma +
+PostgreSQL). UI dan API dikirim oleh proses Next.js yang sama.
 
 ## 1. Variabel lingkungan
 
 | Variabel | Wajib | Default | Keterangan |
 | --- | --- | --- | --- |
-| `BACKEND_API_URL` | ya | `http://localhost:8000` | Base URL backend (tanpa `/api/v1`). Dipakai oleh rewrite proxy. |
+| `DATABASE_URL` | ya | — | Koneksi PostgreSQL (Prisma). |
+| `JWT_SECRET` | ya | — | Secret HS256 untuk access token. |
+| `FRONTEND_URL` | tidak | `http://localhost:3000` | Basis URL untuk link undangan. |
+| `MAIL_MAILER` | tidak | `log` | `log` (tulis ke log) atau `smtp`. |
+| `MAIL_FROM_ADDRESS` | tidak | `hello@example.com` | Alamat pengirim email. |
+| `MAIL_FROM_NAME` | tidak | `DevT` | Nama pengirim email. |
 | `NEXT_PUBLIC_APP_NAME` | tidak | `DevT` | Nama aplikasi pada UI. |
 
-> **Penting:** `next.config.ts` membaca `BACKEND_API_URL` **saat build** untuk
-> menyusun aturan `rewrites`. Pada `output: "standalone"` dan image Docker, nilai
-> ini ter-bake ke hasil build. Jika backend berpindah URL, lakukan build ulang
-> (atau sediakan sebagai build arg, lihat bagian Docker).
-
-Semua request browser memakai path same-origin `/api/backend/*` yang di-proxy ke
-`${BACKEND_API_URL}/api/v1/*`, sehingga tidak ada masalah CORS dan URL backend
-tidak terekspos ke klien.
+Semua variabel bersifat **runtime** (tidak di-bake saat build), kecuali
+`NEXT_PUBLIC_*` yang harus tersedia saat build.
 
 ## 2. Menjalankan lokal (Node)
 
 ```bash
 npm ci
-cp .env.example .env.local   # sesuaikan BACKEND_API_URL
-npm run dev                  # http://localhost:3000
-```
-
-Produksi lokal:
-
-```bash
+cp .env.example .env          # sesuaikan DATABASE_URL & JWT_SECRET
+npx prisma migrate deploy     # terapkan migration
+npm run db:seed               # data contoh (opsional)
 npm run build
-npm start                    # menyajikan hasil build di :3000
+npm start                     # http://localhost:3000
 ```
+
+Development: `npm run dev`.
 
 ## 3. Docker
 
 `output: "standalone"` aktif, sehingga image akhir hanya memuat server minimal.
+Tahap build tidak membutuhkan database.
 
 ### Build & jalankan manual
 
 ```bash
-docker build --build-arg BACKEND_API_URL=http://host.docker.internal:8000 -t frontend_davt .
-docker run --rm -p 3000:3000 frontend_davt
+docker build -t frontend_davt .
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL=postgresql://user:pass@host:5432/davt_next \
+  -e JWT_SECRET=... \
+  frontend_davt
 ```
 
 ### Docker Compose
@@ -51,18 +52,16 @@ docker run --rm -p 3000:3000 frontend_davt
 docker compose up --build
 ```
 
-- `docker-compose.yml` menetapkan default `BACKEND_API_URL=http://host.docker.internal:8000`
-  dan menambahkan `extra_hosts` agar nama host tersebut juga bekerja di Linux.
-- Jika backend dijalankan lewat `backend_devt/docker-compose.yml` pada network
-  Docker yang sama, arahkan ke nama service-nya:
-
-  ```bash
-  BACKEND_API_URL=http://app:8000 docker compose up --build
-  ```
-
-  lalu hubungkan kedua compose ke network bersama (buat network eksternal dan
-  deklarasikan di kedua file), atau jalankan backend dengan `ports: 8000:8000`
-  dan pakai `host.docker.internal`.
+- `docker-compose.yml` meneruskan variabel dari shell/host `.env`, dengan
+  default yang menunjuk ke container Postgres di host
+  (`host.docker.internal:5433`).
+- Jalankan migration dari luar container (atau tambahkan langkah migrate di
+  entrypoint): `npx prisma migrate deploy`.
+- **Lampiran task** disimpan di disk `storage/app/private` di dalam container.
+  Untuk produksi, pasang volume agar file tidak hilang saat container dibuat
+  ulang, mis. `-v davt_storage:/app/storage/app/private`.
+- Simpan `MAIL_MAILER=log` pada demo; gunakan SMTP bila email notifikasi perlu
+  benar-benar terkirim (Phase 2 mengirim lewat log mailer).
 
 ### Struktur image
 
@@ -72,13 +71,11 @@ menjalankan `node server.js` sebagai user non-root).
 
 ## 4. Deploy ke platform terkelola (mis. Vercel)
 
-1. Set environment variable `BACKEND_API_URL` pada environment build.
+1. Sediakan `DATABASE_URL` (mis. Neon/Supabase) dan `JWT_SECRET` pada
+   environment runtime.
 2. Build command `npm run build`, output standar Next.js.
-3. Pastikan backend dapat diakses publik dari server platform (rewrite dilakukan
-   di sisi server Next.js, bukan browser).
-
-> Catatan: `output: "standalone"` tetap kompatibel dengan Vercel namun tidak
-> diperlukan di sana. Untuk platform serverless, boleh dihapus.
+3. Jalankan `npx prisma migrate deploy` sekali per rilis (build step atau
+   release command).
 
 ## 5. Checklist rilis
 
@@ -87,20 +84,20 @@ menjalankan `node server.js` sebagai user non-root).
 - [ ] `npm run typecheck`
 - [ ] `npm test`
 - [ ] `npm run build`
-- [ ] `BACKEND_API_URL` benar & backend sehat (`GET /api/v1/...` merespons)
-- [ ] Backend sudah di-seed (user demo + project/task) agar UI tidak kosong
+- [ ] `DATABASE_URL` & `JWT_SECRET` benar; migration terakhir sudah `deploy`
+- [ ] Database sudah di-seed (user demo + project/task) agar UI tidak kosong
 - [ ] Login demo berhasil dan token tersimpan di cookie `davt_token`
 - [ ] Redirect rute terlindungi berjalan (belum login → `/login`)
+- [ ] Unggah lampiran berhasil dan file bisa dibuka lewat signed URL `/storage/...`
+- [ ] Volume `storage/app/private` terpasang (lampiran tidak publik)
 
 ## 6. Troubleshooting
 
-- **Login gagal padahal user ada**: pastikan backend yang diakses memakai basis
-  data yang sama dengan yang di-seed. Pada `backend_devt`, menjalankan
-  `php artisan serve` lokal memakai PostgreSQL `.env` (mis. `127.0.0.1:5432`),
-  sedangkan container Docker (`docker compose up`) memakai `db` internal yang
-  dipetakan ke `127.0.0.1:5433`. Data bisa berbeda antar keduanya.
-- **UI kosong / dashboard nol**: user demo belum memiliki project/task. Jalankan
-  seeder di lingkungan backend yang benar, mis.
-  `docker exec backend_devt-app-1 php artisan db:seed --force`.
+- **Login gagal padahal user ada**: pastikan aplikasi memakai database yang
+  sama dengan yang di-seed (`DATABASE_URL` di environment runtime vs lokal).
+- **UI kosong / dashboard nol**: jalankan `npm run db:seed` (idempoten —
+  melewati seed bila `demo@davt.test` sudah ada) atau `npm run db:reset`
+  untuk reset penuh (menghapus data!).
+- **Tabel tidak ada**: `npx prisma migrate deploy`.
 - **Aset statis hilang di Docker**: pastikan `public/` dan `.next/static`
   tersalin (sudah ditangani `Dockerfile`).

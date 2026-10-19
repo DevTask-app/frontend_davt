@@ -1,14 +1,17 @@
 services:
   web:
-    build:
-      context: .
-      args:
-        # URL backend yang diakses dari dalam container web.
-        # Ganti ke http://app:8000 jika backend_devt berjalan di network Docker yang sama.
-        BACKEND_API_URL: ${BACKEND_API_URL:-http://host.docker.internal:8000}
+    build: .
     image: frontend_davt
     restart: unless-stopped
     ports:
       - "3000:3000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    environment:
+      # Arahkan ke database yang dipakai aplikasi (mis. container Postgres di host).
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:dastin1234@host.docker.internal:5433/davt_next}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-please-32-chars-minimum}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-DevT}

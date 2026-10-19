@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      BACKEND_API_URL: http://localhost:8000
     steps:
       - uses: actions/checkout@v4
 

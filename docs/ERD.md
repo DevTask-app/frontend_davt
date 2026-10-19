@@ -1,6 +1,7 @@
 # ERD — DevT
 
-Entity Relationship Diagram untuk backend (`backend_devt`, Laravel + PostgreSQL).
+Entity Relationship Diagram untuk backend (kini Route Handlers Next.js +
+Prisma; skema di `prisma/schema.prisma`, semula Laravel `backend_devt`).
 Frontend tidak memiliki basis data sendiri; seluruh data diambil dari REST API
 `/api/v1`.
 
