@@ -184,7 +184,10 @@ Resource anggota (`/members`):
 - **Undang** — body: `email` (required, ≤255), `role` (default `Member`, tidak
   boleh `Owner`). Ditolak `422` bila email sudah jadi anggota atau sudah punya
   undangan pending. Undangan berlaku **7 hari**; email dikirim via mailer
-  (driver `log` pada dev).
+  (driver `log` pada dev). Pengiriman dijalankan **setelah respons terkirim**
+  (`after`) agar latensi SMTP (1–5 detik) tidak menahan respons `201`; bila
+  transport gagal, permintaan tetap `201` dan error dicatat ke log server
+  (Laravel mengirim sinkron dan akan membalas `500`).
 - **Terima undangan** — `POST /invitations/{token}/accept` (tanpa header
   workspace). Email user harus sama dengan email undangan (`403`); undangan
   tidak pending/kedaluwarsa → `410`. Respons mengembalikan workspace yang

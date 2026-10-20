@@ -188,7 +188,8 @@ docker-compose.yml
   `POST /notifications/read-all`, `DELETE /notifications/{id}`. Notifikasi dibuat
   saat task diberikan ke assignee lain (bukan self-assign) pada create/ubah
    assignee, disertai email (template HTML + text identik dengan Laravel;
-   mailer `smtp` mengirim sungguhan, `log` mencetak ke console).
+   mailer `smtp` mengirim sungguhan, `log` mencetak ke console). Email
+   dikirim setelah respons terkirim (`after`) — lihat `lib/server/mail-defer.ts`.
 
 ## Keamanan dependensi
 

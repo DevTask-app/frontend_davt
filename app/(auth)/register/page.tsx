@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { ErrorBanner } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { safeNextPath } from "@/lib/auth";
 import { registerSchema, zodFieldErrors } from "@/lib/validation";
 
 export default function RegisterPage() {
@@ -39,7 +40,7 @@ export default function RegisterPage() {
     setErrors({});
     setSubmitting(true);
     try {
-      await register(parsed.data);
+      await register(parsed.data, safeNextPath());
     } catch (error) {
       if (error instanceof ApiError) {
         setErrors(error.flattenErrors());

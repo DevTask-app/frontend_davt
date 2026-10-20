@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/task-badges";
@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
+import { useRealtimeEvents } from "@/lib/realtime";
 import { TASK_PRIORITIES, TASK_STATUSES } from "@/lib/enums";
+import { useWorkspace } from "@/components/providers/workspace-provider";
 import { useAuth } from "@/components/providers/auth-provider";
 import type { DashboardSummary, Task, WeeklyReport, Paginated } from "@/lib/types";
 import { formatDate, todayISO } from "@/lib/utils";
@@ -22,7 +24,28 @@ export default function DashboardPage() {
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const { user } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refresh panel dashboard senyap saat ada perubahan task di workspace ini.
+  useRealtimeEvents((event) => {
+    if (!activeWorkspace || event.workspace_id !== activeWorkspace.id) return;
+    if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    realtimeTimer.current = setTimeout(() => {
+      realtimeTimer.current = null;
+      setReloadKey((key) => key + 1);
+    }, 400);
+  });
+
+  useEffect(
+    () => () => {
+      if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -69,7 +92,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [user?.id, reloadKey]);
 
   if (loading) return <Spinner label="Memuat dashboard…" />;
   if (error) return <ErrorBanner message={error} />;

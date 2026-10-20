@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ProjectForm } from "@/components/projects/project-form";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
+import { useRealtimeEvents } from "@/lib/realtime";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { useAuth } from "@/components/providers/auth-provider";
 import type { Project, Task, TaskStatus } from "@/lib/types";
@@ -41,6 +42,26 @@ export default function ProjectDetailPage() {
     task: Task;
     status: TaskStatus;
   } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refresh board/list task project ini senyap saat ada perubahan.
+  useRealtimeEvents((event) => {
+    if (event.project_id !== Number(projectId)) return;
+    if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    realtimeTimer.current = setTimeout(() => {
+      realtimeTimer.current = null;
+      setReloadKey((key) => key + 1);
+    }, 300);
+  });
+
+  useEffect(
+    () => () => {
+      if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -66,7 +87,7 @@ export default function ProjectDetailPage() {
     return () => {
       active = false;
     };
-  }, [projectId]);
+  }, [projectId, reloadKey]);
 
   function upsertTask(task: Task) {
     setTasks((prev) => {

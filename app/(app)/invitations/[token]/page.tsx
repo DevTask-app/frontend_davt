@@ -14,34 +14,35 @@ export default function AcceptInvitationPage() {
   const router = useRouter();
   const { refresh } = useWorkspace();
   const [error, setError] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    let active = true;
 
     api
       .acceptWorkspaceInvitation(token)
       .then(async () => {
-        if (!active) return;
-        await refresh();
-        if (!active) return;
-        router.replace("/dashboard");
+        try {
+          await refresh();
+        } catch {
+          // Workspace list is refetched by the dashboard layout anyway.
+        }
+        setAccepted(true);
       })
       .catch((err) => {
-        if (!active) return;
         setError(
           err instanceof ApiError
             ? err.firstError()
             : "Gagal menerima undangan.",
         );
       });
+  }, [token, refresh]);
 
-    return () => {
-      active = false;
-    };
-  }, [token, refresh, router]);
+  useEffect(() => {
+    if (accepted) router.replace("/dashboard");
+  }, [accepted, router]);
 
   if (error) {
     return (

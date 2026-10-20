@@ -8,6 +8,7 @@ import {
 import { prisma } from "@/lib/server/db";
 import { handle, json, modelNotFound, validationError } from "@/lib/server/http";
 import { sendWorkspaceInvitationMail } from "@/lib/server/mail";
+import { sendAfterResponse } from "@/lib/server/mail-defer";
 import { invitationResource } from "@/lib/server/resources";
 import { randomToken } from "@/lib/server/workspace-actions";
 import { parseOrThrow, invitationStoreSchema } from "@/lib/server/validation";
@@ -78,13 +79,15 @@ export async function POST(request: Request, { params }: Params): Promise<Respon
       },
     });
 
-    await sendWorkspaceInvitationMail({
-      to: invitation.email,
-      workspaceName: workspace.name,
-      acceptUrl: invitationResource(invitation).accept_url,
-      token: invitation.token,
-      expiresAt: invitation.expiresAt,
-    });
+    sendAfterResponse(() =>
+      sendWorkspaceInvitationMail({
+        to: invitation.email,
+        workspaceName: workspace.name,
+        acceptUrl: invitationResource(invitation).accept_url,
+        token: invitation.token,
+        expiresAt: invitation.expiresAt,
+      }),
+    );
 
     return json(
       { data: invitationResource(invitation, { inviter: user }) },

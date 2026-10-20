@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BlockedReasonDialog } from "@/components/tasks/blocked-reason-dialog";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
@@ -12,6 +12,7 @@ import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
+import { useRealtimeEvents } from "@/lib/realtime";
 import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from "@/lib/enums";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -90,6 +91,25 @@ export default function TasksPage() {
   const today = todayISO();
   const { user } = useAuth();
 
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refresh daftar task senyap (tanpa spinner) saat ada perubahan, termasuk
+  // dari tab lain dengan akun yang sama (perubahan server tetap truth).
+  useRealtimeEvents((event) => {
+    if (!activeWorkspace || event.workspace_id !== activeWorkspace.id) return;
+    if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    realtimeTimer.current = setTimeout(() => {
+      realtimeTimer.current = null;
+      setReloadKey((key) => key + 1);
+    }, 300);
+  });
+
+  useEffect(
+    () => () => {
+      if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;

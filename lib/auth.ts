@@ -50,3 +50,23 @@ export function setStoredUser(user: User | null): void {
 export const authCookies = {
   token: TOKEN_COOKIE,
 };
+
+/**
+ * Resolves the redirect target set by the proxy via `?next=`. Only same-app
+ * absolute paths are honored so an injected URL can never leave the origin.
+ */
+export function parseNextPath(
+  search: string | null | undefined,
+  fallback = "/dashboard",
+): string {
+  if (!search) return fallback;
+  const next = new URLSearchParams(search).get("next");
+  if (!next) return fallback;
+  if (!next.startsWith("/") || next.startsWith("//")) return fallback;
+  return next;
+}
+
+export function safeNextPath(fallback = "/dashboard"): string {
+  if (!isBrowser()) return fallback;
+  return parseNextPath(window.location.search, fallback);
+}

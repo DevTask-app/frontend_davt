@@ -200,3 +200,17 @@ export interface AppNotification {
   created_at: string | null;
 }
 
+export type RealtimeEventType =
+  | "task.created"
+  | "task.updated"
+  | "task.deleted";
+
+export interface RealtimeEvent {
+  type: RealtimeEventType;
+  workspace_id: number;
+  task_id: number;
+  project_id: number;
+  actor_id: number;
+  at: string;
+}
+

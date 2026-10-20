@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/server/db";
 import { handle, json, modelNotFound, noContent, validationError } from "@/lib/server/http";
 import { taskResource } from "@/lib/server/resources";
+import { publishTaskRealtime } from "@/lib/server/realtime";
 import { updateTask } from "@/lib/server/task-actions";
 import { parseOrThrow, taskUpdateSchema } from "@/lib/server/validation";
 
@@ -80,6 +81,13 @@ export async function DELETE(request: Request, { params }: Params): Promise<Resp
     await prisma.task.update({
       where: { id: task.id },
       data: { deletedAt: new Date() },
+    });
+
+    await publishTaskRealtime({
+      type: "task.deleted",
+      projectId: task.projectId,
+      taskId: task.id,
+      actorId: user.id,
     });
 
     return noContent();

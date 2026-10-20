@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { ErrorBanner } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { safeNextPath } from "@/lib/auth";
 import { loginSchema, zodFieldErrors } from "@/lib/validation";
 
 export default function LoginPage() {
@@ -30,7 +31,7 @@ export default function LoginPage() {
     setErrors({});
     setSubmitting(true);
     try {
-      await login(parsed.data);
+      await login(parsed.data, safeNextPath());
     } catch (error) {
       if (error instanceof ApiError) {
         setErrors(error.flattenErrors());

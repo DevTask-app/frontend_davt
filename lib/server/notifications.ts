@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { sendTaskAssignedMail } from "./mail";
+import { sendAfterResponse } from "./mail-defer";
 
 /** Laravel notification class name stored in `notifications.type`. */
 export const TASK_ASSIGNED_TYPE = "App\\Notifications\\TaskAssigned";
@@ -60,11 +61,13 @@ export async function notifyTaskAssignee(
     },
   });
 
-  await sendTaskAssignedMail({
-    to: assignee.email,
-    taskTitle: task.title,
-    projectName: data.project_name,
-    assignedBy: actor.name,
-    url: data.url,
-  });
+  sendAfterResponse(() =>
+    sendTaskAssignedMail({
+      to: assignee.email,
+      taskTitle: task.title,
+      projectName: data.project_name,
+      assignedBy: actor.name,
+      url: data.url,
+    }),
+  );
 }

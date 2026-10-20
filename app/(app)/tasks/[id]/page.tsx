@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AssigneeChip } from "@/components/tasks/assignee";
@@ -15,6 +15,7 @@ import { EmptyState, ErrorBanner, Spinner } from "@/components/ui/feedback";
 import { Select } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { api, ApiError } from "@/lib/api";
+import { useRealtimeEvents } from "@/lib/realtime";
 import {
   ACTIVITY_ACTIONS,
   FIELD_LABELS,
@@ -80,6 +81,39 @@ export default function TaskDetailPage() {
       active = false;
     };
   }, [taskId]);
+
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function refreshQuiet() {
+    Promise.all([api.getTask(taskId), api.taskActivities(taskId)])
+      .then(([taskRes, activityRes]) => {
+        setTask(taskRes.data);
+        setActivities(activityRes.data);
+        setError(null);
+      })
+      .catch(() => undefined);
+  }
+
+  // Sinkronkan task ini saat ada perubahan, termasuk dari tab lain.
+  useRealtimeEvents((event) => {
+    if (event.task_id !== Number(taskId)) return;
+    if (event.type === "task.deleted") {
+      router.replace("/tasks");
+      return;
+    }
+    if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    realtimeTimer.current = setTimeout(() => {
+      realtimeTimer.current = null;
+      refreshQuiet();
+    }, 300);
+  });
+
+  useEffect(
+    () => () => {
+      if (realtimeTimer.current !== null) clearTimeout(realtimeTimer.current);
+    },
+    [],
+  );
 
   async function changeStatus(status: TaskStatus, blockedReason?: string) {
     if (!task) return;

@@ -1,6 +1,7 @@
 import type { Task } from "@prisma/client";
 import { prisma } from "./db";
 import { notifyTaskAssignee } from "./notifications";
+import { publishTaskRealtime } from "./realtime";
 import { dateOnly, decimalString } from "./resources";
 
 export interface TaskFieldValues {
@@ -132,6 +133,12 @@ export async function createTask({ projectId, userId, data }: CreateTaskInput): 
   });
 
   await notifyTaskAssignee(task.id, userId);
+  await publishTaskRealtime({
+    type: "task.created",
+    projectId,
+    taskId: task.id,
+    actorId: userId,
+  });
   return task;
 }
 
@@ -220,5 +227,13 @@ export async function updateTask({ task, userId, data }: UpdateTaskInput): Promi
   });
 
   if ("assignee_id" in changes) await notifyTaskAssignee(task.id, userId);
+  if (Object.keys(changes).length > 0) {
+    await publishTaskRealtime({
+      type: "task.updated",
+      projectId: task.projectId,
+      taskId: task.id,
+      actorId: userId,
+    });
+  }
   return updated;
 }
